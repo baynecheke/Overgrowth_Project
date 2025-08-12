@@ -1,891 +1,420 @@
-<!doctype html>
 
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Overgrowth — Plants Clash (Standalone)</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600&display=swap');
-  :root{
-    --bg1:#dff5d9; --bg2:#7abd74; --panel:#f0f9f0dd; --text:#18491d;
-    --green:#2e7d32; --muted:#8fbc8f; --card:#a3d08d;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;font-family:'Montserrat',sans-serif;color:var(--text);
-    background:linear-gradient(135deg,var(--bg1) 0%,var(--bg2) 100%);user-select:none}
-  #container{max-width:980px;margin:14px auto;background:var(--panel);
-    border-radius:12px;padding:16px;box-shadow:0 12px 30px rgba(42,111,26,0.25)}
-  h1,h2{margin:0 0 10px;text-align:center}
-  #phase{font-weight:800;text-align:center;margin-bottom:10px;color:#164916}
-  .row{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap}
-  .cards-row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;min-height:140px}
-  .card{width:140px;padding:10px;background:var(--card);border-radius:10px;
-    box-shadow:0 0 6px #529534;cursor:pointer;transition:transform .18s,box-shadow .18s;position:relative}
-  .card:hover{transform:scale(1.06);box-shadow:0 0 14px #4a8c32}
-  .card .name{font-weight:800;text-align:center}
-  .card .type{font-style:italic;text-align:center;color:var(--green);font-weight:700}
-  .card .stats{font-size:0.82rem;margin-top:6px;line-height:1.15;text-align:center}
-  .card img{max-width:100%;border-radius:8px;margin-top:6px}
-  .card.selected{outline:3px solid #276626;transform:scale(1.08)}
-  .slot{width:140px;height:150px;border-radius:10px;background:#b9dba0;display:flex;
-    flex-direction:column;align-items:center;justify-content:center;font-weight:800;color:#264f26;cursor:pointer;position:relative}
-  .slot.empty{opacity:.6;font-style:italic}
-  .slot .meta{font-size:0.8rem;font-weight:600;margin-top:6px;text-align:center}
-  .marker{position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.08);
-    border-radius:6px;padding:2px 6px;font-size:0.75rem;font-weight:800}
-  .marker.stunned{background:#ffd6d6;color:#8b1e1e}
-  .marker.exhausted{background:#fff0c2;color:#8b5b00}
-  .energy-bar{width:100%;height:8px;background:#d6f0d6;border-radius:6px;overflow:hidden;margin-top:6px}
-  .energy-fill{height:100%;background:#2e7d32;width:0%}
-  #controls{display:flex;gap:10px;justify-content:center;margin-top:12px}
-  button{background:var(--green);color:white;border:none;padding:10px 14px;border-radius:10px;
-    font-weight:800;cursor:pointer}
-  button:disabled{background:var(--muted);cursor:not-allowed}
-  #log{background:#f9f9f9;border-radius:8px;padding:10px;height:180px;overflow:auto;border:2px solid #a1d07a;white-space:pre-wrap;color:#164916;margin-top:12px}
-  #difficulty-screen{display:flex;flex-direction:column;align-items:center;gap:10px;margin:12px 0}
-  .difficulty-btn{padding:12px 18px;border-radius:12px;background:#2e7d32;color:white;font-weight:900;cursor:pointer}
-  .difficulty-row{display:flex;gap:12px}
-  .player-highlight{box-shadow:0 0 18px #4a9132}
-  small.note{display:block;text-align:center;color:#355b30;margin-top:6px}
-  input[type=file]{display:block;margin-top:6px}
-  #custom-add{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:8px}
-  .shake{animation:shake .4s ease}
-  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}50%{transform:translateX(5px)}75%{transform:translateX(-5px)}}
-  footer{margin-top:12px;text-align:center;color:#2e6b2e;font-size:0.9rem}
-</style>
-</head>
-<body>
-  <div id="container">
-    <h1>Overgrowth — Plants Clash</h1>
-    <div id="phase">Pick a difficulty to start</div>
+import React, { useEffect, useState } from 'react';
 
-    <div id="difficulty-screen">
-      <div class="difficulty-row">
-        <button class="difficulty-btn" data-diff="easy">Easy</button>
-        <button class="difficulty-btn" data-diff="normal">Normal</button>
-        <button class="difficulty-btn" data-diff="hard">Hard</button>
+// Overgrowth — Single-file React app with hand-made SVG card art, Pokémon-like mat layout,
+// one plant acts per turn (you click the plant), and each plant has two moves:
+// - Primary (attack): deals damage to an enemy plant (benefits from type advantage +10)
+// - Support (ability): helps an ally (type-based: heal/energy/atk buff)
+// Persistent local username with stats stored in localStorage.
+
+// --- Sample card pool ---
+const SAMPLE_CARDS = [
+  { id: 'S1', name: 'Moonvine', type: 'Nocturnal', energy: 2, hp: 30, atk: 12, passive: 'Night Surge' },
+  { id: 'S2', name: 'Shroomguard', type: 'Fungal', energy: 3, hp: 40, atk: 8, passive: 'Tough Spores' },
+  { id: 'S3', name: 'Brambleback', type: 'Thorn', energy: 2, hp: 50, atk: 10, passive: 'Thorny' },
+  { id: 'S4', name: 'Riverling', type: 'Water', energy: 2, hp: 28, atk: 14, passive: 'Hydrated' },
+  { id: 'S5', name: 'Sunpetal', type: 'Sun', energy: 2, hp: 26, atk: 13, passive: 'Photosynth' },
+  { id: 'S6', name: 'Rootkin', type: 'Normal', energy: 1, hp: 22, atk: 9, passive: 'Versatile' },
+];
+
+const TYPE_ORDER = ['Nocturnal', 'Fungal', 'Normal', 'Thorn', 'Water', 'Sun'];
+
+function uid(prefix = 'id') { return prefix + '_' + Math.random().toString(36).slice(2,9); }
+function buildDeck(){ const pool = []; for(let r=0;r<6;r++) for(const c of SAMPLE_CARDS) pool.push({...c}); for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];} return pool.map(c=>({...c, uid: uid('card'), currentHP: c.hp, energyCur: c.energy, exhausted:false, atkMod:0})); }
+function typeHasAdvantage(att, def){ const a = TYPE_ORDER.indexOf(att); const d = TYPE_ORDER.indexOf(def); return (a + TYPE_ORDER.length - d) % TYPE_ORDER.length === 1; }
+
+// Inject CSS
+function injectCSS(){ if(typeof document==='undefined') return; const id='og-styles'; if(document.getElementById(id)) return; const css=`
+:root{ --bg:#071024; --panel:rgba(255,255,255,0.02); --muted:#94a3b8; }
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#071024,#0f172a);color:#e6eef8}
+.wrap{max-width:1200px;margin:18px auto;padding:16px}
+.header{display:flex;justify-content:space-between;align-items:center}
+.title{font-weight:800;font-size:28px;background:linear-gradient(90deg,#bbf7d0,#60a5fa);-webkit-background-clip:text;color:transparent}
+.playmat{margin-top:18px;display:grid;grid-template-columns:1fr 360px;gap:14px}
+.panel{background:var(--panel);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04)}
+.leftcol{display:flex;flex-direction:column;gap:12px}
+.mat{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);padding:14px;border-radius:10px}
+.row{display:flex;justify-content:space-between;align-items:center}
+.zone{display:flex;gap:10px;justify-content:center;align-items:center;padding:10px}
+.active-slot{width:220px;height:140px}
+.bench-slot{width:120px;height:100px}
+.card-visual{width:100%;height:100%;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;border:1px solid rgba(255,255,255,0.06);cursor:pointer}
+.card-visual.disabled{opacity:0.45;cursor:default}
+.sidepanel{width:340px;display:flex;flex-direction:column;gap:10px}
+.btn{padding:10px 12px;border-radius:8px;font-weight:700;cursor:pointer;border:none}
+.btn-primary{background:linear-gradient(90deg,#34d399,#60a5fa);color:#05264b}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04)}
+.stats{display:flex;gap:12px;align-items:center}
+.stat-num{font-weight:800;font-size:18px}
+.log{max-height:220px;overflow:auto;padding:8px;background:rgba(0,0,0,0.12);border-radius:8px}
+.select-highlight{outline:3px solid rgba(96,165,250,0.22);box-shadow:0 6px 18px rgba(96,165,250,0.06)}
+`;
+ const s=document.createElement('style'); s.id=id; s.appendChild(document.createTextNode(css)); document.head.appendChild(s); }
+
+// SVG art for types (hand-made)
+function TypeArt({type}){
+  const commonStyle={width:'100%',height:'100%'};
+  if(type==='Sun') return (
+    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="gSun" x1="0" x2="1"><stop offset="0" stopColor="#fffbeb"/><stop offset="1" stopColor="#f59e0b"/></linearGradient></defs>
+      <rect width="100%" height="100%" fill="#fffbeb" opacity="0.04"/>
+      <g transform="translate(100,60)">
+        <circle r="30" fill="url(#gSun)" stroke="#f97316" strokeWidth="3" />
+        <g stroke="#f97316" strokeWidth="3">
+          <line x1="-50" y1="0" x2="-20" y2="0" />
+          <line x1="50" y1="0" x2="20" y2="0" />
+          <line x1="0" y1="-40" x2="0" y2="-20" />
+          <line x1="0" y1="40" x2="0" y2="20" />
+        </g>
+      </g>
+    </svg>
+  );
+  if(type==='Water') return (
+    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#eff6ff" opacity="0.03"/>
+      <g transform="translate(100,60)">
+        <path d="M0 -40 C 28 -20, 28 10, 0 40 C -28 10, -28 -20, 0 -40 Z" fill="#60a5fa" stroke="#1e40af" strokeWidth="2"/>
+        <circle cx="6" cy="-6" r="3" fill="#bfdbfe" />
+      </g>
+    </svg>
+  );
+  if(type==='Thorn') return (
+    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#ecfdf5" opacity="0.02"/>
+      <g transform="translate(100,60)">
+        <path d="M-30 20 C -10 -20, 10 -20, 30 20 L 20 22 C 0 -6, -0 -6, -20 22 Z" fill="#4ade80" stroke="#166534" strokeWidth="2"/>
+        <line x1="-10" y1="-6" x2="-12" y2="-18" stroke="#166534" strokeWidth="2"/>
+        <line x1="10" y1="-6" x2="12" y2="-18" stroke="#166534" strokeWidth="2"/>
+      </g>
+    </svg>
+  );
+  if(type==='Fungal') return (
+    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#fff7ed" opacity="0.02"/>
+      <g transform="translate(100,60)">
+        <ellipse rx="34" ry="18" fill="#fb7185" stroke="#7f1d1d"/>
+        <rect x="-10" y="-2" width="20" height="36" rx="6" fill="#a16207" />
+        <circle cx="-10" cy="-6" r="3" fill="#fecaca" />
+        <circle cx="4" cy="-10" r="2.5" fill="#fecaca" />
+      </g>
+    </svg>
+  );
+  if(type==='Normal') return (
+    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#f0fdf4" opacity="0.02"/>
+      <g transform="translate(100,60)">
+        <path d="M-30 6 C -10 -26, 10 -26, 30 6 C 10 18, -10 18, -30 6 Z" fill="#86efac" stroke="#14532d" strokeWidth="1.5"/>
+        <line x1="-8" y1="-6" x2="8" y2="6" stroke="#14532d" strokeWidth="1"/>
+      </g>
+    </svg>
+  );
+  // Nocturnal
+  return (
+    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#f5f3ff" opacity="0.02"/>
+      <g transform="translate(100,60)">
+        <circle r="20" fill="#a78bfa" />
+        <path d="M-36 -12 C -16 2, -6 10, 6 24 C 18 10, 28 2, 36 -12" stroke="#7c3aed" strokeWidth="2" fill="none" />
+      </g>
+    </svg>
+  );
+}
+
+// Card visual component with SVG art + stats
+function CardVisual({card, className, onClick}){
+  const disabled = !card || (card && card.currentHP <=0);
+  return (
+    <div className={`card-visual ${disabled? 'disabled':''} ${className||''}`} onClick={disabled?undefined:() => onClick && onClick(card)}>
+      <div style={{height:88, background:'#071a2b'}}>
+        {card ? <TypeArt type={card.type} /> : null}
       </div>
-      <small class="note">Easy: AI random. Normal: basic heuristics. Hard: aggressive & energy-aware.</small>
-      <div style="margin-top:10px;"><button id="two-player-btn">Two Player (Local)</button></div>
-    </div>
-
-    <div id="start-controls" style="display:none;text-align:center;margin-bottom:10px">
-      <button id="start-btn">Start Draft</button>
-      <button id="restart-btn" style="margin-left:8px;display:none">Restart</button>
-    </div>
-
-    <div id="garden-section" style="display:none">
-      <h2>Garden (Draft)</h2>
-      <div id="garden" class="cards-row"></div>
-    </div>
-
-    <div id="hand-section" style="display:none">
-      <h2>Your Hand</h2>
-      <div id="hand" class="cards-row"></div>
-    </div>
-
-    <div id="formation-section" style="display:none">
-      <h2>Set Formation</h2>
-      <p style="text-align:center;color:#2a5b2a;font-weight:800">Tap a card from your hand, then tap a formation slot</p>
-      <div id="formation-slots" class="row" style="margin-top:8px">
-        <div class="slot empty" data-slot="primary">Primary</div>
-        <div class="slot empty" data-slot="secondary">Secondary</div>
-        <div class="slot empty" data-slot="support">Support</div>
-      </div>
-      <div style="text-align:center;margin-top:8px">
-        <button id="confirm-formation" disabled>Confirm Formation</button>
+      <div style={{padding:8, display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+        <div>
+          <div style={{fontWeight:800}}>{card ? card.name : '—'}</div>
+          <div style={{fontSize:12,color:'#94a3b8'}}>{card ? card.type : ''}</div>
+        </div>
+        {card && (
+          <div style={{textAlign:'right'}}>
+            <div style={{fontWeight:800}}>{card.currentHP}</div>
+            <div style={{fontSize:12,color:'#94a3b8'}}>HP</div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
 
-    <div id="combat-section" style="display:none">
-      <h2>Combat Phase</h2>
-      <div id="combat-info" style="text-align:center;margin-bottom:8px"></div>
+export default function App(){
+  injectCSS();
+  // user
+  const [username,setUsername] = useState('');
+  const [user,setUser] = useState(null);
+  // game
+  const [deck,setDeck] = useState(()=>buildDeck());
+  const [garden,setGarden] = useState([]);
+  const [pools,setPools] = useState([[],[]]);
+  const [draftTurn,setDraftTurn] = useState(0);
+  const [view,setView] = useState('menu');
+  const [combat,setCombat] = useState(null);
+  const [log,setLog] = useState([]);
+  const [aiDifficulty,setAiDifficulty] = useState('Medium');
+  const [selected, setSelected] = useState(null); // {player:0, slot:'primary'|'secondary'|'support'|'bench-2'}
+  const [mode, setMode] = useState(null); // 'attack' | 'support' | null
+  const aiIndex = 1;
 
-      <h3>Your Formation</h3>
-      <div id="player-formation" class="cards-row"></div>
+  useEffect(()=>{ // draw initial garden
+    const d = deck.slice(); setGarden(d.slice(0,6)); setDeck(d.slice(6));
+    // load user
+    try{ const raw = localStorage.getItem('overgrowthUser'); if(raw){ const u = JSON.parse(raw); if(u && u.name) setUser(u); }}catch{}
+  },[]);
 
-      <h3>Opponent Formation</h3>
-      <div id="opponent-formation" class="cards-row"></div>
+  const appendLog = (m)=> setLog(l=>[m,...l].slice(0,80));
 
-      <div id="controls">
-        <button id="attack-btn" disabled>Attack (1)</button>
-        <button id="active-btn" disabled>Use Active</button>
-        <button id="end-turn-btn" disabled>End Turn</button>
-      </div>
-    </div>
+  const saveUser = (u)=>{ try{ localStorage.setItem('overgrowthUser', JSON.stringify(u)); }catch{} };
 
-    <h2 style="margin-top:12px">Game Log</h2>
-    <div id="log"></div>
-
-    <div style="margin-top:12px;text-align:center">
-      <h3>Add a custom card image</h3>
-      <input type="file" id="customImg" accept="image/*"/>
-      <div id="custom-add">
-        <input id="customName" placeholder="Card name" />
-        <select id="customType">
-          <option>Sun</option><option>Water</option><option>Thorn</option><option>Fungal</option><option>Nocturnal</option><option>Normal</option>
-        </select>
-        <button id="addCustomBtn">Add Card</button>
-      </div>
-      <small class="note">Upload an image, give it a name and type, then click Add — it becomes available in the draft pool.</small>
-    </div>
-
-    <footer>Standalone local game — works offline in the browser</footer>
-  </div>
-
-<script>
-(() => {
-  // ---- Card pool (plant-themed) ----
-  const BASE_CARDS = [
-    {name:"Sunflower",type:"Sun",hp:30,atk:10,energyMax:3,passive:"Heal 2 HP start",activeCost:2,activeDesc:"Heal 5 HP self"},
-    {name:"Water Lily",type:"Water",hp:25,atk:12,energyMax:3,passive:"Immune Burn",activeCost:2,activeDesc:"Energize self +2"},
-    {name:"Thorn Bush",type:"Thorn",hp:40,atk:8,energyMax:2,passive:"Cover 3 damage ally",activeCost:1,activeDesc:"Deal 5 dmg to attacker"},
-    {name:"Fungus",type:"Fungal",hp:20,atk:15,energyMax:3,passive:"Poison attacker 1 turn",activeCost:3,activeDesc:"Drain 2 energy enemy"},
-    {name:"Nightshade",type:"Nocturnal",hp:28,atk:13,energyMax:3,passive:"+5 dmg at night",activeCost:2,activeDesc:"Stun enemy primary"},
-    {name:"Grass",type:"Normal",hp:35,atk:9,energyMax:3,passive:"Chain +3 ATK if Nocturnal & Sun",activeCost:1,activeDesc:"Boost ally ATK +5 this turn"},
-    {name:"Moss",type:"Fungal",hp:22,atk:14,energyMax:3,passive:"Weaken attacker",activeCost:2,activeDesc:"Poison enemy 2 turns"},
-    {name:"Dewdrop",type:"Water",hp:27,atk:11,energyMax:3,passive:"Heal ally 1 HP",activeCost:1,activeDesc:"Energize ally +3"},
-    {name:"Cactus",type:"Thorn",hp:42,atk:9,energyMax:2,passive:"Cover 5 damage",activeCost:2,activeDesc:"Reflect 3 damage"},
-    {name:"Moonflower",type:"Nocturnal",hp:29,atk:14,energyMax:3,passive:"Regain 1 energy turn",activeCost:2,activeDesc:"Stun enemy support"},
-    {name:"Sunberry",type:"Sun",hp:26,atk:13,energyMax:3,passive:"Heal 1 HP turn",activeCost:2,activeDesc:"Heal 7 HP ally"},
-    {name:"Spikeweed",type:"Thorn",hp:38,atk:10,energyMax:2,passive:"Drain energy attacker",activeCost:2,activeDesc:"Deal 6 dmg"},
-    {name:"Sporeling",type:"Fungal",hp:18,atk:16,energyMax:3,passive:"Chain poison allies",activeCost:3,activeDesc:"Seed 1"},
-    {name:"Lunar Grass",type:"Nocturnal",hp:30,atk:12,energyMax:3,passive:"+10 dmg night",activeCost:2,activeDesc:"Boost self ATK +7"},
-    {name:"Raindrop",type:"Water",hp:25,atk:14,energyMax:3,passive:"Immune burn",activeCost:1,activeDesc:"Energize self +4"},
-    {name:"Thorn Vine",type:"Thorn",hp:39,atk:11,energyMax:2,passive:"Cover 4 dmg",activeCost:1,activeDesc:"Counter attack 5 dmg"},
-    {name:"Normal Grass",type:"Normal",hp:34,atk:10,energyMax:3,passive:"Chain buff allies",activeCost:1,activeDesc:"Heal 4 HP"},
-    {name:"Shadow Fungus",type:"Fungal",hp:21,atk:15,energyMax:3,passive:"Poison enemies",activeCost:3,activeDesc:"Drain 3 energy"},
-    {name:"Solar Bloom",type:"Sun",hp:28,atk:12,energyMax:3,passive:"Heal self 2 HP",activeCost:2,activeDesc:"Heal ally 6 HP"},
-    {name:"Night Vine",type:"Nocturnal",hp:27,atk:14,energyMax:3,passive:"Stun chance on attack",activeCost:2,activeDesc:"Stun enemy primary"},
-    {name:"Frost Dew",type:"Water",hp:24,atk:13,energyMax:3,passive:"Slow enemy",activeCost:2,activeDesc:"Freeze attacker"},
-    {name:"Spiny Bush",type:"Thorn",hp:41,atk:9,energyMax:2,passive:"Reflect damage",activeCost:1,activeDesc:"Counter attack 7 dmg"},
-    {name:"Poison Moss",type:"Fungal",hp:19,atk:16,energyMax:3,passive:"Poison attacker",activeCost:3,activeDesc:"Seed 2"},
-    {name:"Glowgrass",type:"Normal",hp:33,atk:11,energyMax:3,passive:"Chain buff",activeCost:1,activeDesc:"Boost ally ATK"},
-    {name:"Dusk Flower",type:"Nocturnal",hp:28,atk:13,energyMax:3,passive:"+5 damage night",activeCost:2,activeDesc:"Stun enemy support"},
-    {name:"Riverweed",type:"Water",hp:26,atk:12,energyMax:3,passive:"Heal ally 2 HP",activeCost:1,activeDesc:"Energize ally +2"},
-    {name:"Briar Thorn",type:"Thorn",hp:40,atk:10,energyMax:2,passive:"Cover damage",activeCost:2,activeDesc:"Deal damage to attacker"},
-    {name:"Seedling",type:"Normal",hp:10,atk:10,energyMax:1,passive:"No abilities",activeCost:0,activeDesc:""},
-    {name:"Thorned Bramble",type:"Thorn",hp:36,atk:12,energyMax:2,passive:"Return 2 dmg when hit",activeCost:2,activeDesc:"Deal 8 dmg"},
-    {name:"Sunblossom Priestess",type:"Sun",hp:24,atk:8,energyMax:3,passive:"Boost allies +1 atk start",activeCost:2,activeDesc:"Heal all allies 4"},
-    {name:"Venomous Pitcher",type:"Fungal",hp:23,atk:15,energyMax:3,passive:"Poison attackers",activeCost:3,activeDesc:"Poison enemy 3 turns"},
-    {name:"Giant Puff Fungus",type:"Fungal",hp:45,atk:6,energyMax:2,passive:"Tanky",activeCost:2,activeDesc:"Seed 1"},
-    {name:"Solar Sprout",type:"Sun",hp:22,atk:14,energyMax:3,passive:"Gain energy on heal",activeCost:1,activeDesc:"Energize self +2"},
-    {name:"Ivy Snare",type:"Normal",hp:28,atk:9,energyMax:3,passive:"Slow attacker",activeCost:2,activeDesc:"Weaken enemy -3 ATK"},
-    {name:"Mist Orchid",type:"Water",hp:26,atk:11,energyMax:3,passive:"Restore 1 HP passive",activeCost:2,activeDesc:"Heal ally 5"},
-    {name:"Brimstone Moss",type:"Fungal",hp:20,atk:17,energyMax:3,passive:"Burn on hit",activeCost:3,activeDesc:"Drain 2 energy enemy"},
-    {name:"Creeping Lantern",type:"Nocturnal",hp:30,atk:12,energyMax:3,passive:"Grant stealth night",activeCost:2,activeDesc:"Stun enemy support"},
-  ];
-
-  // local custom cards (added via upload)
-  const CUSTOM_CARDS = [];
-
-  // ---- State ----
-  const state = {
-    phase:'init',
-    difficulty:'normal',
-    twoPlayer:false,
-    garden:[],
-    players:[
-      {hand:[],formation:{primary:null,secondary:null,support:null},energy:{},hp:{},exhausted:{},statuses:{},formationSet:false},
-      {hand:[],formation:{primary:null,secondary:null,support:null},energy:{},hp:{},exhausted:{},statuses:{},formationSet:false}
-    ],
-    draftCount:0,
-    currentPlayer:0,
-    tempSelectedCard:null,
-    combatTurn:0,
-    selectedAttacker:null,
-    selectedTarget:null,
-    aiThinkDelay:700
+  // login flow
+  const handleLogin = ()=>{
+    if(!username) return alert('Enter a username');
+    const u = { name: username, wins:0, losses:0 }; setUser(u); saveUser(u); setUsername('');
   };
 
-  // ---- DOM ----
-  const phaseEl = document.getElementById('phase');
-  const gardenEl = document.getElementById('garden');
-  const handEl = document.getElementById('hand');
-  const startBtn = document.getElementById('start-btn');
-  const restartBtn = document.getElementById('restart-btn');
-  const formationSection = document.getElementById('formation-section');
-  const formationSlots = document.querySelectorAll('.slot');
-  const confirmFormationBtn = document.getElementById('confirm-formation');
-  const playerFormationEl = document.getElementById('player-formation');
-  const opponentFormationEl = document.getElementById('opponent-formation');
-  const attackBtn = document.getElementById('attack-btn');
-  const activeBtn = document.getElementById('active-btn');
-  const endTurnBtn = document.getElementById('end-turn-btn');
-  const logEl = document.getElementById('log');
-  const combatInfoEl = document.getElementById('combat-info');
-  const difficultyScreen = document.getElementById('difficulty-screen');
-  const twoPlayerBtn = document.getElementById('two-player-btn');
-  const startControls = document.getElementById('start-controls');
-  const gardenSection = document.getElementById('garden-section');
-  const handSection = document.getElementById('hand-section');
-  const combatSection = document.getElementById('combat-section');
+  // drafting functions (same as before, but simplified)
+  const refillGardenIfEmpty = (g)=>{ if(g.length===0){ const top6 = deck.slice(0,6); setGarden(top6); setDeck(d=>deck.slice(6)); return top6;} return g; };
 
-  // custom card inputs
-  const customImgInput = document.getElementById('customImg');
-  const customNameInput = document.getElementById('customName');
-  const customTypeSelect = document.getElementById('customType');
-  const addCustomBtn = document.getElementById('addCustomBtn');
+  const humanPick = (i)=>{
+    if(draftTurn!==0) return; const picked = garden[i]; if(!picked) return; const g = garden.slice(); g.splice(i,1); setPools(p=>{ const np=JSON.parse(JSON.stringify(p)); np[0].push(picked); return np; }); setGarden(g); setDraftTurn(1); appendLog(`You picked ${picked.name}`); setTimeout(()=> aiPick(),200);
+  };
+  const aiPick = ()=>{ let g = garden.slice(); g = refillGardenIfEmpty(g); setTimeout(function doPick(){ setPools(p=>{ const np=JSON.parse(JSON.stringify(p)); if(np[1].length>=3) return np; const pick=aiDraftPick(g); if(!pick) return np; const gi=g.findIndex(c=>c.uid===pick.uid); if(gi>=0) g.splice(gi,1); np[1].push(pick); appendLog(`AI picked ${pick.name}`); if(g.length===0){ const top6=deck.slice(0,6); g.push(...top6); setDeck(d=>deck.slice(6)); } setGarden(g.slice()); if(np[1].length<3) setTimeout(doPick,160); else setDraftTurn(0); return np; }); },120); };
 
-  // utils
-  function log(msg){
-    const now = new Date().toLocaleTimeString();
-    logEl.textContent = `[${now}] ${msg}\n` + logEl.textContent;
-  }
-  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } }
+  const startDraft = (difficulty='Medium')=>{ setAiDifficulty(difficulty); const d = buildDeck(); setDeck(d); setGarden(d.slice(0,6)); setDeck(d.slice(6)); setPools([[],[]]); setDraftTurn(0); setView('draft'); setLog([]); appendLog('Draft started'); };
 
-  // ---- Difficulty selection ----
-  document.querySelectorAll('.difficulty-btn').forEach(b=>{
-    b.addEventListener('click', ()=> {
-      state.difficulty = b.dataset.diff;
-      state.twoPlayer = false;
-      difficultyScreen.style.display = 'none';
-      startControls.style.display = 'block';
-      phaseEl.textContent = `Difficulty: ${state.difficulty.toUpperCase()}. Click Start Draft to begin.`;
-      startBtn.style.display = 'inline-block';
-    });
-  });
-  twoPlayerBtn.addEventListener('click', ()=>{
-    state.twoPlayer = true;
-    difficultyScreen.style.display = 'none';
-    startControls.style.display = 'block';
-    phaseEl.textContent = 'Two-player local selected. Click Start Draft to begin.';
-  });
+  const beginCombatFromPicks = ()=>{
+    const newDeck = deck.slice(); const poolsCopy = JSON.parse(JSON.stringify(pools)); for(let i=0;i<2;i++){ while(poolsCopy[i].length<6 && newDeck.length>0) poolsCopy[i].push(newDeck.pop()); }
+    setDeck(newDeck);
+    const setups = poolsCopy.map(pool=>{ const primary = pool[0]?{...pool[0], uid: uid('s'), currentHP: pool[0].hp, energyCur: pool[0].energy, exhausted:false, atkMod:0}:null; const secondary = pool[1]?{...pool[1], uid: uid('s'), currentHP: pool[1].hp, energyCur: pool[1].energy, exhausted:false, atkMod:0}:null; const support = pool[2]?{...pool[2], uid: uid('s'), currentHP: pool[2].hp, energyCur: pool[2].energy, exhausted:false, atkMod:0}:null; const bench = (pool.slice(3,6)||[]).map(c=>({...c, uid:uid('b'), currentHP:c.hp, energyCur:c.energy, exhausted:false, atkMod:0})); return {primary,secondary,support,bench}; });
+    setCombat({setups, turnPlayer:0}); setView('combat'); appendLog('Combat begun');
+  };
 
-  // ---- Start/Draft ----
-  startBtn.addEventListener('click', ()=> startDraft());
-  restartBtn.addEventListener('click', ()=> location.reload());
+  // helper to update combat state immutably
+  const setCombatState = (updater)=>{ setCombat(prev=>{ const next = typeof updater==='function'? updater(prev): updater; return next; }); };
 
-  function startDraft(){
-    state.phase = 'draft';
-    state.draftCount = 0;
-    state.currentPlayer = 0;
-    state.players.forEach(p=>{
-      p.hand=[]; p.formation={primary:null,secondary:null,support:null};
-      p.energy={}; p.hp={}; p.exhausted={}; p.statuses={}; p.formationSet=false;
-    });
-    logEl.textContent = '';
-    gardenSection.style.display = 'block';
-    handSection.style.display = 'block';
-    formationSection.style.display = 'none';
-    combatSection.style.display = 'none';
-    startBtn.style.display = 'none';
-    restartBtn.style.display = 'inline-block';
-    generateGardenChoices();
-    renderGarden();
-    renderHand();
-    phaseEl.textContent = `Gardening Phase: Player ${state.currentPlayer+1} pick (${state.players[state.currentPlayer].hand.length}/3)`;
+  // Support effect by type
+  function supportEffect(sourceType, target){ // returns description and modifies target object in-place
+    // simple mapping: Sun = heal 6, Water = +1 energy, Thorn = +2 atk for target, Fungal = heal 3+energy, Normal = +3 atk, Nocturnal = +1 energy +2 atk
+    if(!target) return 'No target';
+    if(sourceType==='Sun'){ target.currentHP = Math.min((target.maxHP||target.currentHP)+1000, (target.currentHP||0)+6); return 'Healed 6 HP'; }
+    if(sourceType==='Water'){ target.energyCur = (target.energyCur||0)+1; return 'Gave +1 energy'; }
+    if(sourceType==='Thorn'){ target.atkMod = (target.atkMod||0)+2; return 'Granted +2 ATK'; }
+    if(sourceType==='Fungal'){ target.currentHP = (target.currentHP||0)+3; target.energyCur = (target.energyCur||0)+1; return 'Healed 3 HP and +1 energy'; }
+    if(sourceType==='Normal'){ target.atkMod = (target.atkMod||0)+3; return 'Granted +3 ATK'; }
+    // Nocturnal
+    target.atkMod = (target.atkMod||0)+2; target.energyCur = (target.energyCur||0)+1; return 'Night boost: +2 ATK +1 energy';
   }
 
-  function generateGardenChoices(){
-    const pool = BASE_CARDS.concat(CUSTOM_CARDS).slice();
-    shuffle(pool);
-    state.garden = pool.slice(0,6).map(c=>({...c,id:Math.random().toString(36).slice(2)}));
-  }
-
-  function renderGarden(){
-    gardenEl.innerHTML = '';
-    state.garden.forEach(card =>{
-      const el = createCardEl(card);
-      el.addEventListener('click', ()=>{
-        if(state.phase !== 'draft') return;
-        if(state.players[state.currentPlayer].hand.length >= 3) return;
-        const copy = {...card,id:Math.random().toString(36).slice(2)};
-        state.players[state.currentPlayer].hand.push(copy);
-        state.garden = state.garden.filter(c => c.id !== card.id);
-        state.draftCount++;
-        if(state.garden.length < 2) generateGardenChoices();
-        renderGarden();
-        renderHand();
-        if(state.twoPlayer){
-          state.currentPlayer = (state.currentPlayer+1)%2;
-          phaseEl.textContent = `Gardening Phase: Player ${state.currentPlayer+1} pick (${state.players[state.currentPlayer].hand.length}/3)`;
-        } else {
-          if(state.players[0].hand.length < 3){
-            state.currentPlayer = 1;
-            phaseEl.textContent = `Gardening Phase: AI picking...`;
-            setTimeout(()=> aiDraftPick(), 400);
-          }
-        }
-        if(state.players[0].hand.length===3 && state.players[1].hand.length===3){
-          setTimeout(()=> startFormationSetup(), 350);
-        }
-      });
-      gardenEl.appendChild(el);
-    });
-  }
-
-  function renderHand(){
-    handEl.innerHTML = '';
-    const p = state.players[state.currentPlayer];
-    p.hand.forEach(card=>{
-      const el = createCardEl(card);
-      if(state.phase==='formation'){
-        el.addEventListener('click', ()=>{
-          if(state.tempSelectedCard && state.tempSelectedCard.id === card.id){
-            state.tempSelectedCard = null;
-            el.classList.remove('selected');
-            return;
-          }
-          state.tempSelectedCard = card;
-          Array.from(handEl.children).forEach(c=>c.classList.remove('selected'));
-          el.classList.add('selected');
-        });
-      }
-      handEl.appendChild(el);
-    });
-  }
-
-  function createCardEl(card, small=false){
-    const el = document.createElement('div');
-    el.className = 'card';
-    el.dataset.id = card.id;
-    el.innerHTML = `<div class="name">${card.name}</div>
-                    <div class="type">${card.type || ''}</div>
-                    <div class="stats">${small? '' : `HP: ${card.hp} &nbsp; ATK: ${card.atk}<br/>Energy: ${card.energyMax}<br/>Passive: ${card.passive || ''}<br/>Active: ${card.activeDesc || ''} (Cost:${card.activeCost||0})`}</div>`;
-    if(card.imgUrl) el.innerHTML += `<img src="${card.imgUrl}" alt="${card.name}">`;
-    return el;
-  }
-
-  // ---- Formation setup ----
-  function startFormationSetup(){
-    state.phase = 'formation';
-    state.currentPlayer = 0;
-    formationSection.style.display = 'block';
-    handSection.style.display = 'block';
-    gardenSection.style.display = 'none';
-    combatSection.style.display = 'none';
-    state.tempSelectedCard = null;
-    renderHandFormation();
-    updateFormationSlotsUI();
-    phaseEl.textContent = `Formation Setup: Player ${state.currentPlayer+1}`;
-    confirmFormationBtn.disabled = true;
-  }
-
-  function renderHandFormation(){
-    handEl.innerHTML = '';
-    const p = state.players[state.currentPlayer];
-    p.hand.forEach(card=>{
-      const el = createCardEl(card);
-      el.addEventListener('click', ()=>{
-        if(state.phase !== 'formation') return;
-        if(state.tempSelectedCard && state.tempSelectedCard.id === card.id){
-          state.tempSelectedCard = null; el.classList.remove('selected'); return;
-        }
-        state.tempSelectedCard = card;
-        Array.from(handEl.children).forEach(c=>c.classList.remove('selected'));
-        el.classList.add('selected');
-      });
-      handEl.appendChild(el);
-    });
-    updateFormationSlotsUI();
-  }
-
-  formationSlots.forEach(slot=>{
-    slot.addEventListener('click', ()=>{
-      if(state.phase !== 'formation') return;
-      if(!state.tempSelectedCard){
-        slot.classList.add('shake'); setTimeout(()=>slot.classList.remove('shake'),400);
-        return;
-      }
-      const s = slot.dataset.slot;
-      if(state.players[state.currentPlayer].formation[s]){
-        slot.classList.add('shake'); setTimeout(()=>slot.classList.remove('shake'),400); return;
-      }
-      const hand = state.players[state.currentPlayer].hand;
-      const idx = hand.findIndex(c=>c.id === state.tempSelectedCard.id);
-      if(idx === -1) return;
-      const card = hand.splice(idx,1)[0];
-      const runtime = {...card};
-      runtime.currentHp = runtime.hp;
-      runtime.currentEnergy = runtime.energyMax;
-      runtime.id = runtime.id || Math.random().toString(36).slice(2);
-      state.players[state.currentPlayer].formation[s] = runtime;
-      state.players[state.currentPlayer].energy[runtime.id] = runtime.currentEnergy;
-      state.players[state.currentPlayer].hp[runtime.id] = runtime.currentHp;
-      state.players[state.currentPlayer].exhausted[runtime.id] = false;
-      state.players[state.currentPlayer].statuses[runtime.id] = {stunned:false,poison:0};
-      state.tempSelectedCard = null;
-      renderHandFormation();
-      updateFormationSlotsUI();
-      const f = state.players[state.currentPlayer].formation;
-      confirmFormationBtn.disabled = !(f.primary && f.secondary && f.support);
-    });
-  });
-
-  function updateFormationSlotsUI(){
-    const p = state.players[state.currentPlayer];
-    formationSlots.forEach(slot=>{
-      const name = slot.dataset.slot;
-      const card = p.formation[name];
-      if(card){
-        slot.classList.remove('empty');
-        slot.innerHTML = `<div style="font-weight:900">${card.name}</div><div class="meta">HP:${card.currentHp} ATK:${card.atk}</div>
-          <div class="energy-bar"><div class="energy-fill" style="width:${Math.round(100*(card.currentEnergy/card.energyMax)||0)}%"></div></div>`;
-        slot.querySelectorAll('.marker')?.forEach(m=>m.remove());
-        if(p.statuses[card.id] && p.statuses[card.id].stunned) {
-          const mk = document.createElement('div'); mk.className='marker stunned'; mk.textContent='STUNNED'; slot.appendChild(mk);
-        }
-      } else {
-        slot.classList.add('empty');
-        slot.innerHTML = name.charAt(0).toUpperCase()+name.slice(1);
-        slot.querySelectorAll('.marker')?.forEach(m=>m.remove());
-      }
-    });
-  }
-
-  confirmFormationBtn.addEventListener('click', ()=>{
-    state.players[state.currentPlayer].formationSet = true;
-    log(`Player ${state.currentPlayer+1} confirmed formation.`);
-    if(state.twoPlayer){
-      state.currentPlayer = 1 - state.currentPlayer;
-      phaseEl.textContent = `Formation Setup: Player ${state.currentPlayer+1}`;
-      state.tempSelectedCard = null;
-      renderHandFormation();
-      updateFormationSlotsUI();
-      confirmFormationBtn.disabled = true;
-      if(state.players[0].formationSet && state.players[1].formationSet) startCombat();
-    } else {
-      if(state.currentPlayer === 0){
-        state.currentPlayer = 1;
-        phaseEl.textContent = 'Formation Setup: AI choosing formation...';
-        setTimeout(()=> aiSetFormation(), 600);
-      }
+  // perform attack from source to target
+  const executeAttack = (sourcePlayer, sourceSlot, targetPlayer, targetSlot)=>{
+    if(!combat) return;
+    const s = JSON.parse(JSON.stringify(combat));
+    const actor = s.setups[sourcePlayer][sourceSlot];
+    const target = s.setups[targetPlayer][targetSlot];
+    if(!actor || !target) return appendLog('Invalid attack');
+    if(actor.exhausted || actor.energyCur<1) return appendLog('Actor cannot act');
+    // consume energy
+    actor.energyCur -= 1; if(actor.energyCur<=0) actor.exhausted = true;
+    const baseAtk = actor.atk + (actor.atkMod||0);
+    let dmg = baseAtk + (typeHasAdvantage(actor.type, target.type)?10:0);
+    target.currentHP -= dmg;
+    appendLog(`${actor.name} attacked ${target.name} for ${dmg} damage`);
+    // check death and shift
+    if(target.currentHP<=0){ s.setups[targetPlayer][targetSlot]=null; appendLog(`${target.name} was defeated`);
+      if(targetSlot==='primary'){ s.setups[targetPlayer].primary = s.setups[targetPlayer].secondary||null; s.setups[targetPlayer].secondary = s.setups[targetPlayer].support||null; s.setups[targetPlayer].support = s.setups[targetPlayer].bench.shift()||null; }
+      else if(targetSlot==='secondary'){ s.setups[targetPlayer].secondary = s.setups[targetPlayer].support||null; s.setups[targetPlayer].support = s.setups[targetPlayer].bench.shift()||null; }
+      else if(targetSlot==='support'){ s.setups[targetPlayer].support = s.setups[targetPlayer].bench.shift()||null; }
     }
-  });
+    setCombat(s);
+    const res = checkVictory(s); if(res){ appendLog('Match result: '+res); if(user){ const updated = {...user}; if(res==='win') updated.wins=(updated.wins||0)+1; else if(res==='loss') updated.losses=(updated.losses||0)+1; setUser(updated); saveUser(updated);} setView('menu'); setCombat(null); return; }
+    // clear selection and mode
+    setSelected(null); setMode(null);
+    // AI turn
+    if(sourcePlayer===0) setTimeout(()=> aiTakeTurn(), 450);
+  };
 
-  // ---- Combat ----
-  function startCombat(){
-    state.phase = 'combat';
-    formationSection.style.display = 'none';
-    gardenSection.style.display = 'none';
-    handSection.style.display = 'none';
-    combatSection.style.display = 'block';
-    state.currentPlayer = 0;
-    state.combatTurn = 1;
-    [0,1].forEach(pi=>{
-      ['primary','secondary','support'].forEach(slot=>{
-        const c = state.players[pi].formation[slot];
-        if(c){
-          c.currentHp = c.currentHp || c.hp;
-          c.currentEnergy = c.currentEnergy || c.energyMax;
-          state.players[pi].statuses[c.id] = state.players[pi].statuses[c.id] || {stunned:false,poison:0};
-        }
-      });
-    });
-    renderCombatBoards();
-    updateCombatUI();
-    log('Combat begins!');
+  // execute support action: source helps target (both player indices required)
+  const executeSupport = (sourcePlayer, sourceSlot, targetPlayer, targetSlot)=>{
+    if(!combat) return; const s = JSON.parse(JSON.stringify(combat)); const actor = s.setups[sourcePlayer][sourceSlot]; const target = s.setups[targetPlayer][targetSlot]; if(!actor || !target) return appendLog('Invalid support'); if(actor.exhausted || actor.energyCur<1) return appendLog('Actor cannot act'); actor.energyCur -= 1; if(actor.energyCur<=0) actor.exhausted=true; const desc = supportEffect(actor.type, target); appendLog(`${actor.name} used support on ${target.name}: ${desc}`); setCombat(s); setSelected(null); setMode(null); if(sourcePlayer===0) setTimeout(()=> aiTakeTurn(), 450);
+  };
+
+  function getPlayerSlots(playerIndex){ if(!combat) return []; const s = combat.setups[playerIndex]; const slots = [ ['primary', s.primary], ['secondary', s.secondary], ['support', s.support] ]; // bench add as bench-0..n
+    s.bench.forEach((b,i)=> slots.push([`bench-${i}`, b])); return slots; }
+
+  // AI simple choice: pick any non-exhausted attacker, prefer attack
+  function aiTakeTurn(){ if(!combat) return; // find an attacker
+    const s = combat; const aiSetup = s.setups[aiIndex]; const playerSetup = s.setups[0]; // pick attacker slot
+    const candidates = ['primary','secondary','support'].filter(slot=> aiSetup[slot] && !aiSetup[slot].exhausted && aiSetup[slot].energyCur>=1);
+    if(candidates.length===0){ appendLog('AI has no available actions'); return; }
+    const pickSlot = candidates[Math.floor(Math.random()*candidates.length)]; const actor = aiSetup[pickSlot]; // decide attack or support
+    // if ally low hp, support sometimes
+    const allyLow = (aiSetup.primary&&aiSetup.primary.currentHP< (aiSetup.primary.maxHP||aiSetup.primary.currentHP)/2) || (aiSetup.secondary&&aiSetup.secondary.currentHP< (aiSetup.secondary.maxHP||aiSetup.secondary.currentHP)/2);
+    const doSupport = allyLow && Math.random()<0.5;
+    if(doSupport){ // support random ally (not itself)
+      const allies = getPlayerSlots(aiIndex).filter(([k,card])=>card && k!==pickSlot);
+      if(allies.length>0){ const [tSlot, tCard] = allies[Math.floor(Math.random()*allies.length)]; executeSupport(aiIndex, pickSlot, aiIndex, tSlot); return; }
+    }
+    // otherwise attack player's primary/secondary/support
+    const targetSlot = (playerSetup.primary? 'primary' : playerSetup.secondary? 'secondary' : playerSetup.support? 'support' : null);
+    if(targetSlot){ executeAttack(aiIndex, pickSlot, 0, targetSlot); }
   }
 
-  function renderCombatBoards(){
-    playerFormationEl.innerHTML=''; opponentFormationEl.innerHTML='';
-    const pIdx = state.currentPlayer, oIdx = 1 - pIdx;
-    ['primary','secondary','support'].forEach(slot=>{
-      const slotDiv = document.createElement('div');
-      slotDiv.className='slot';
-      const card = state.players[pIdx].formation[slot];
-      if(card){
-        slotDiv.innerHTML = `<div style="font-weight:900">${card.name}</div><div class="meta">HP:${card.currentHp} ATK:${card.atk}</div>
-          <div class="energy-bar"><div class="energy-fill" style="width:${Math.round(100*(card.currentEnergy/card.energyMax)||0)}%"></div></div>`;
-        slotDiv.dataset.cardId = card.id;
-        slotDiv.dataset.slot = slot;
-        if(state.players[pIdx].statuses[card.id]?.stunned) { const mk=document.createElement('div');mk.className='marker stunned';mk.textContent='STUNNED';slotDiv.appendChild(mk); }
-        if(state.players[pIdx].exhausted[card.id]) { const mk=document.createElement('div');mk.className='marker exhausted';mk.textContent='EXH';slotDiv.appendChild(mk); }
-      } else { slotDiv.classList.add('empty'); slotDiv.textContent = slot; }
-      playerFormationEl.appendChild(slotDiv);
-    });
-    ['primary','secondary','support'].forEach(slot=>{
-      const slotDiv = document.createElement('div');
-      slotDiv.className='slot';
-      const card = state.players[oIdx].formation[slot];
-      if(card){
-        slotDiv.innerHTML = `<div style="font-weight:900">${card.name}</div><div class="meta">HP:${card.currentHp} ATK:${card.atk}</div>
-          <div class="energy-bar"><div class="energy-fill" style="width:${Math.round(100*(card.currentEnergy/card.energyMax)||0)}%"></div></div>`;
-        slotDiv.dataset.cardId = card.id;
-        slotDiv.dataset.slot = slot;
-        if(state.players[oIdx].statuses[card.id]?.stunned) { const mk=document.createElement('div');mk.className='marker stunned';mk.textContent='STUNNED';slotDiv.appendChild(mk); }
-        if(state.players[oIdx].exhausted[card.id]) { const mk=document.createElement('div');mk.className='marker exhausted';mk.textContent='EXH';slotDiv.appendChild(mk); }
-      } else { slotDiv.classList.add('empty'); slotDiv.textContent = slot; }
-      opponentFormationEl.appendChild(slotDiv);
-    });
+  // UI handlers
+  function onSelectCard(player, slot){ if(!combat) return; // player must be human (0)
+    if(player!==0) return; const card = slot.startsWith('bench') ? combat.setups[player].bench[Number(slot.split('-')[1])] : combat.setups[player][slot]; if(!card) return; if(card.exhausted||card.energyCur<1) { appendLog('Selected plant cannot act'); return; } setSelected({player, slot}); setMode(null); }
 
-    Array.from(playerFormationEl.children).forEach(el=>{
-      el.addEventListener('click', ()=>{
-        if(state.phase !== 'combat') return;
-        if(el.classList.contains('empty')) return;
-        Array.from(playerFormationEl.children).forEach(c=>c.classList.remove('selected'));
-        Array.from(opponentFormationEl.children).forEach(c=>c.classList.remove('selected'));
-        el.classList.add('selected');
-        state.selectedAttacker = getCardById(state.currentPlayer, el.dataset.cardid || el.dataset.cardId);
-        state.selectedTarget = null;
-        updateCombatUI();
-      });
-    });
-    Array.from(opponentFormationEl.children).forEach(el=>{
-      el.addEventListener('click', ()=>{
-        if(state.phase !== 'combat') return;
-        if(el.classList.contains('empty')) return;
-        Array.from(opponentFormationEl.children).forEach(c=>c.classList.remove('selected'));
-        el.classList.add('selected');
-        state.selectedTarget = getCardById(1-state.currentPlayer, el.dataset.cardid || el.dataset.cardId);
-        updateCombatUI();
-      });
-    });
+  function onClickEnemy(player, slot){ if(!selected || !mode) return; if(mode!=='attack'){ appendLog('Switch to Attack mode to target enemy'); return; } executeAttack(selected.player, selected.slot, player, slot); }
+  function onClickAlly(player, slot){ if(!selected || !mode) return; if(mode!=='support'){ appendLog('Switch to Support mode to target ally'); return; } executeSupport(selected.player, selected.slot, player, slot); }
 
-    if(playerFormationEl) playerFormationEl.classList.toggle('player-highlight', true);
-    combatInfoEl.textContent = `Turn ${state.combatTurn} — Player ${state.currentPlayer+1}'s turn`;
-  }
+  // small helper to show slot card
+  function slotCard(player, slot){ if(!combat) return null; if(slot.startsWith('bench')) return combat.setups[player].bench[Number(slot.split('-')[1])]||null; return combat.setups[player][slot]; }
 
-  function getCardById(playerIndex, cardId){
-    if(!cardId) return null;
-    const form = state.players[playerIndex].formation;
-    for(const s of ['primary','secondary','support']){
-      const c = form[s];
-      if(c && c.id === cardId) return {card:c,slot:s};
-    }
-    return null;
-  }
+  return (
+    <div className="wrap">
+      <div className="header">
+        <div className="title">Overgrowth</div>
+        <div style={{display:'flex',gap:12,alignItems:'center'}}>
+          {!user ? (
+            <div style={{display:'flex',gap:8}}>
+              <input placeholder="Username" value={username} onChange={(e)=>setUsername(e.target.value)} style={{padding:8,borderRadius:8,border:'1px solid rgba(255,255,255,0.04)',background:'transparent',color:'#e6eef8'}} />
+              <button className="btn btn-primary" onClick={handleLogin}>Login</button>
+            </div>
+          ) : (
+            <div style={{display:'flex',gap:8,alignItems:'center'}}>
+              <div style={{color:'#94a3b8'}}>Player: <strong style={{color:'#fff'}}>{user.name}</strong></div>
+              <div className="stats"><div className="stat-num" style={{color:'#34d399'}}>{user.wins}</div><div style={{color:'#94a3b8'}}>W</div><div style={{width:8}}></div><div className="stat-num" style={{color:'#fb7185'}}>{user.losses}</div><div style={{color:'#94a3b8'}}>L</div></div>
+            </div>
+          )}
+        </div>
+      </div>
 
-  function updateCombatUI(){
-    combatInfoEl.textContent = `Turn ${state.combatTurn} — Player ${state.currentPlayer+1}`;
-    let canAttack = false;
-    if(state.selectedAttacker && state.selectedTarget){
-      const attacker = state.selectedAttacker.card;
-      if(attacker.currentEnergy >= 1 && !state.players[state.currentPlayer].exhausted[attacker.id] && !state.players[state.currentPlayer].statuses[attacker.id]?.stunned){
-        canAttack = true;
-      }
-    }
-    attackBtn.disabled = !canAttack;
-    let canActive = false;
-    if(state.selectedAttacker){
-      const attacker = state.selectedAttacker.card;
-      if(attacker.activeCost > 0 && attacker.currentEnergy >= attacker.activeCost && !state.players[state.currentPlayer].statuses[attacker.id]?.stunned){
-        canActive = true;
-      }
-    }
-    activeBtn.disabled = !canActive;
-    endTurnBtn.disabled = false;
-    renderCombatBoards();
-  }
+      <div className="playmat">
+        <div className="leftcol">
+          <div className="panel mat">
+            {/* Opponent row (AI) */}
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:12}}>
+                <div style={{width:120}}></div>
+                <div className="active-slot">
+                  <CardVisual card={combat?.setups[1].primary} onClick={()=>{}} />
+                </div>
+                <div style={{width:120}}></div>
+              </div>
+              <div style={{display:'flex',justifyContent:'center',gap:10}}>
+                {Array.from({length:3}).map((_,i)=> (
+                  <div key={i} className="bench-slot">
+                    <CardVisual card={combat?.setups[1].bench[i]||null} onClick={()=>{}} />
+                  </div>
+                ))}
+              </div>
+            </div>
 
-  // Attack action
-  attackBtn.addEventListener('click', ()=>{
-    if(!state.selectedAttacker || !state.selectedTarget) { return; }
-    const atk = state.selectedAttacker.card;
-    const tgt = state.selectedTarget.card;
-    if(atk.currentEnergy < 1) return;
-    atk.currentEnergy -= 1;
-    state.players[state.currentPlayer].exhausted[atk.id] = true;
-    tgt.currentHp -= atk.atk;
-    log(`P${state.currentPlayer+1} ${atk.name} attacked ${tgt.name} for ${atk.atk} dmg.`);
-    if(tgt.currentHp <= 0){
-      log(`${tgt.name} was defeated.`);
-      killCard(1-state.currentPlayer, tgt.id);
-      state.selectedTarget = null;
-    }
-    updateCombatUI();
-  });
+            <hr style={{border:'none',height:12}} />
 
-  // Active ability
-  activeBtn.addEventListener('click', ()=>{
-    if(!state.selectedAttacker) return;
-    const atk = state.selectedAttacker.card;
-    if(atk.currentEnergy < atk.activeCost) return;
-    atk.currentEnergy -= atk.activeCost;
-    state.players[state.currentPlayer].exhausted[atk.id] = true;
-    const desc = (atk.activeDesc||'').toLowerCase();
-    let targetInfo = state.selectedTarget || state.selectedAttacker;
-    if(desc.includes('heal')){
-      const m = desc.match(/(\d+)/); const amount = m ? parseInt(m[0],10) : 5;
-      targetInfo.card.currentHp = Math.min(targetInfo.card.currentHp + amount, targetInfo.card.hp);
-      log(`${atk.name} used active to heal ${targetInfo.card.name} for ${amount}.`);
-    } else if(desc.includes('energize') || desc.includes('energise') || desc.includes('+')){
-      const m = desc.match(/\+(\d+)/); const amount = m ? parseInt(m[1],10) : 2;
-      targetInfo.card.currentEnergy = Math.min(targetInfo.card.currentEnergy + amount, targetInfo.card.energyMax);
-      log(`${atk.name} energized ${targetInfo.card.name} +${amount}.`);
-    } else if(desc.includes('stun')){
-      if(state.selectedTarget){
-        state.players[1-state.currentPlayer].statuses[state.selectedTarget.card.id].stunned = true;
-        log(`${atk.name} stunned ${state.selectedTarget.card.name}.`);
-      } else {
-        const maybe = firstAlive(1-state.currentPlayer);
-        if(maybe) { state.players[1-state.currentPlayer].statuses[maybe.id].stunned = true; log(`${atk.name} stunned ${maybe.name}.`); }
-      }
-    } else if(desc.includes('drain')){
-      if(state.selectedTarget){
-        const m = desc.match(/(\d+)/); const amount = m?parseInt(m[0],10):1;
-        state.selectedTarget.card.currentEnergy = Math.max(0, state.selectedTarget.card.currentEnergy - amount);
-        log(`${atk.name} drained ${amount} energy from ${state.selectedTarget.card.name}.`);
-      }
-    } else {
-      log(`${atk.name} used its active ability.`);
-    }
-    updateCombatUI();
-  });
+            {/* Player row */}
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:12}}>
+                <div style={{width:120}}></div>
+                <div className={`active-slot ${selected?.player===0 && selected?.slot==='primary' ? 'select-highlight':''}`} onClick={()=> onSelectCard(0,'primary')}>
+                  <CardVisual card={combat?.setups[0].primary||null} onClick={()=> onSelectCard(0,'primary')} />
+                </div>
+                <div style={{width:120}}></div>
+              </div>
+              <div style={{display:'flex',justifyContent:'center',gap:10}}>
+                {Array.from({length:3}).map((_,i)=> (
+                  <div key={i} className={`bench-slot ${selected?.player===0 && selected?.slot===`bench-${i}` ? 'select-highlight':''}`} onClick={()=> onSelectCard(0,`bench-${i}`)}>
+                    <CardVisual card={combat?.setups[0].bench[i]||null} onClick={()=> onSelectCard(0,`bench-${i}`)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
 
-  // End turn
-  endTurnBtn.addEventListener('click', ()=>{
-    endTurn();
-  });
+          <div className="panel">
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div style={{fontWeight:800}}>Draft</div>
+              <div style={{color:'#94a3b8'}}>Garden face-up</div>
+            </div>
+            <div style={{marginTop:10}} className="garden-grid">
+              {garden.map((c,i)=> (
+                <div key={c.uid} className="card" onClick={()=> humanPick(i)}>
+                  <div style={{fontWeight:800}}>{c.name}</div>
+                  <div style={{fontSize:12,color:'#94a3b8'}}>{c.type} • HP {c.hp} • ATK {c.atk}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{marginTop:10}}>
+              <button className="btn btn-primary" onClick={()=> startDraft()}>Start Draft</button>
+              <button className="btn btn-ghost" style={{marginLeft:8}} onClick={()=> beginCombatFromPicks()}>Begin Combat (use picks)</button>
+            </div>
+          </div>
 
-  function endTurn(){
-    const p = state.currentPlayer;
-    Object.keys(state.players[p].exhausted).forEach(id => state.players[p].exhausted[id] = false);
-    ['primary','secondary','support'].forEach(slot=>{
-      const c = state.players[p].formation[slot];
-      if(c && c.currentHp > 0){ c.currentEnergy = Math.min(c.energyMax, c.currentEnergy + 1); }
-    });
-    ['primary','secondary','support'].forEach(slot=>{
-      const c = state.players[p].formation[slot];
-      if(c){
-        const st = state.players[p].statuses[c.id];
-        if(st && st.poison>0){
-          c.currentHp -= st.poison;
-          log(`${c.name} took ${st.poison} poison.`);
-          st.poison = Math.max(0, st.poison-1);
-          if(c.currentHp <= 0) { log(`${c.name} died to poison.`); killCard(p, c.id); }
-        }
-        if(st && st.stunned){ st.stunned = false; }
-      }
-    });
+        </div>
 
-    if(isDefeated(0) || isDefeated(1)){
-      if(isDefeated(0) && isDefeated(1)){ phaseEl.textContent = 'Draw!'; log('Both players wiped out.'); disableCombat(); return; }
-      if(isDefeated(0)){ phaseEl.textContent = 'Player 2 wins!'; log('Player 2 wins the match.'); disableCombat(); return; }
-      if(isDefeated(1)){ phaseEl.textContent = 'Player 1 wins!'; log('Player 1 wins the match.'); disableCombat(); return; }
-    }
+        <div className="panel sidepanel">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div style={{fontWeight:800}}>Side Panel</div>
+            <div style={{color:'#94a3b8'}}>{selected? `${selected.player===0?'You':'AI'} - ${selected.slot}` : 'No selection'}</div>
+          </div>
 
-    state.currentPlayer = 1 - state.currentPlayer;
-    state.combatTurn += 1;
-    state.selectedAttacker = null; state.selectedTarget = null;
-    renderCombatBoards();
-    updateCombatUI();
-    if(!state.twoPlayer && state.currentPlayer === 1){
-      setTimeout(()=> aiTakeTurn(), state.aiThinkDelay);
-    }
-  }
+          <div style={{marginTop:6}}>
+            <div style={{fontWeight:700}}>Actions</div>
+            <div style={{display:'flex',gap:8,marginTop:8}}>
+              <button className="btn btn-primary" onClick={()=> setMode('attack')} disabled={!selected}>Attack</button>
+              <button className="btn btn-primary" onClick={()=> setMode('support')} disabled={!selected}>Support</button>
+              <button className="btn btn-ghost" onClick={()=>{ setSelected(null); setMode(null); }}>Clear</button>
+            </div>
+            <div style={{marginTop:8,color:'#94a3b8'}}>Mode: {mode||'None'}</div>
+          </div>
 
-  function disableCombat(){
-    attackBtn.disabled = true; activeBtn.disabled = true; endTurnBtn.disabled = true;
-  }
+          <div style={{marginTop:10}}>
+            <div style={{fontWeight:700}}>Targeting</div>
+            <div style={{marginTop:8}}>
+              <div style={{fontSize:13,color:'#94a3b8'}}>Click an enemy card to target for Attack, or click an ally for Support.</div>
+              <div style={{display:'flex',flexDirection:'column',marginTop:8,gap:6}}>
+                {/* Enemy targets */}
+                <div style={{fontWeight:700}}>Enemy Targets</div>
+                <div style={{display:'flex',gap:8}}>
+                  {['primary','secondary','support'].map(slot=> (
+                    <div key={slot} style={{flex:1}}>
+                      <div style={{fontSize:12,color:'#94a3b8',marginBottom:6}}>{slot}</div>
+                      <div onClick={()=> onClickEnemy(1,slot)} className="card" style={{textAlign:'center'}}>{combat?.setups[1][slot]? combat.setups[1][slot].name : '—'}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{height:6}} />
+                <div style={{fontWeight:700}}>Ally Targets</div>
+                <div style={{display:'flex',gap:8}}>
+                  {[ 'primary','secondary','support' ].map(slot=> (
+                    <div key={slot} style={{flex:1}}>
+                      <div style={{fontSize:12,color:'#94a3b8',marginBottom:6}}>{slot}</div>
+                      <div onClick={()=> onClickAlly(0,slot)} className="card" style={{textAlign:'center'}}>{combat?.setups[0][slot]? combat.setups[0][slot].name:'—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
 
-  function isDefeated(pi){
-    const f = state.players[pi].formation;
-    return !( (f.primary && f.primary.currentHp>0) || (f.secondary && f.secondary.currentHp>0) || (f.support && f.support.currentHp>0) );
-  }
+          <div style={{marginTop:10}}>
+            <div style={{fontWeight:700}}>Controls</div>
+            <div style={{display:'flex',gap:8,marginTop:8}}>
+              <button className="btn btn-ghost" onClick={()=>{ setView('menu'); setCombat(null); }}>Exit to Menu</button>
+              <button className="btn btn-ghost" onClick={()=> setLog([])}>Clear Log</button>
+            </div>
+          </div>
 
-  function killCard(playerIndex, cardId){
-    const f = state.players[playerIndex].formation;
-    for(const s of ['primary','secondary','support']){
-      if(f[s] && f[s].id === cardId) f[s] = null;
-    }
-  }
+        </div>
+      </div>
 
-  function firstAlive(playerIndex){
-    const f = state.players[playerIndex].formation;
-    for(const s of ['primary','secondary','support']){
-      const c = f[s];
-      if(c && c.currentHp > 0) return c;
-    }
-    return null;
-  }
-
-  // ---- AI: draft, formation, combat ----
-  function aiDraftPick(){
-    const choices = state.garden;
-    if(!choices.length) { generateGardenChoices(); renderGarden(); return; }
-    let chosen;
-    if(state.difficulty === 'easy') {
-      chosen = choices[Math.floor(Math.random()*choices.length)];
-    } else {
-      let bestScore = -Infinity;
-      choices.forEach(c=>{
-        const score = c.atk * (state.difficulty==='hard'?2:1.2) + c.energyMax*1.1 + (c.hp/10);
-        if(score > bestScore){ bestScore = score; chosen = c; }
-      });
-    }
-    const copy = {...chosen, id:Math.random().toString(36).slice(2)};
-    state.players[1].hand.push(copy);
-    state.garden = state.garden.filter(c=>c.id!==chosen.id);
-    renderGarden();
-    log('AI picked a card.');
-    state.currentPlayer = 0;
-    phaseEl.textContent = `Gardening Phase: Player ${state.currentPlayer+1} pick (${state.players[state.currentPlayer].hand.length}/3)`;
-    renderHand();
-    if(state.players[0].hand.length===3 && state.players[1].hand.length===3){
-      setTimeout(()=> startFormationSetup(), 300);
-    }
-  }
-
-  function aiSetFormation(){
-    const ai = state.players[1];
-    const hand = ai.hand.slice();
-    hand.sort((a,b)=> ( (b.hp - a.hp) ));
-    const primary = hand.shift();
-    hand.sort((a,b)=> (b.atk - a.atk));
-    const secondary = hand.shift();
-    const support = hand.shift();
-    [primary,secondary,support].forEach((card, idx)=>{
-      if(!card) return;
-      const runtime = {...card, currentHp:card.hp, currentEnergy:card.energyMax, id: card.id || Math.random().toString(36).slice(2)};
-      const slot = idx===0?'primary':(idx===1?'secondary':'support');
-      state.players[1].formation[slot] = runtime;
-      state.players[1].energy[runtime.id] = runtime.currentEnergy;
-      state.players[1].hp[runtime.id] = runtime.currentHp;
-      state.players[1].exhausted[runtime.id] = false;
-      state.players[1].statuses[runtime.id] = {stunned:false,poison:0};
-    });
-    ai.hand = [];
-    ai.formationSet = true;
-    log('AI placed its formation.');
-    state.currentPlayer = 0;
-    renderHandFormation();
-    if(state.players[0].formationSet && state.players[1].formationSet) startCombat();
-    else {
-      if(!state.players[0].formationSet) {
-        phaseEl.textContent = 'Formation Setup: Player 1';
-        confirmFormationBtn.disabled = true;
-      }
-    }
-  }
-
-  function aiTakeTurn(){
-    if(state.phase !== 'combat') return;
-    const aiIdx = 1;
-    const candidates = [];
-    ['primary','secondary','support'].forEach(s=>{
-      const c = state.players[aiIdx].formation[s];
-      if(c && c.currentHp>0){
-        const st = state.players[aiIdx].statuses[c.id];
-        if(st && st.stunned) return;
-        candidates.push({card:c,slot:s});
-      }
-    });
-    if(candidates.length===0){ endTurn(); return; }
-    let action = 'attack';
-    if(state.difficulty==='easy'){ action = Math.random()<0.15?'active':'attack'; }
-    else if(state.difficulty==='normal'){ action = Math.random()<0.33?'active':'attack'; }
-    else { action = 'attack'; }
-    let attackerChoice;
-    if(state.difficulty==='easy'){
-      attackerChoice = candidates[Math.floor(Math.random()*candidates.length)];
-    } else if(state.difficulty==='normal'){
-      const haveE = candidates.filter(x=>x.card.currentEnergy>0);
-      attackerChoice = (haveE.length? haveE[Math.floor(Math.random()*haveE.length)] : candidates[Math.floor(Math.random()*candidates.length)]);
-    } else {
-      candidates.sort((a,b)=> b.card.atk - a.card.atk);
-      attackerChoice = candidates.find(c=>c.card.currentEnergy>=1) || candidates[0];
-    }
-    const humanIdx = 0;
-    const aliveEnemy = [];
-    ['primary','secondary','support'].forEach(s=>{
-      const c = state.players[humanIdx].formation[s];
-      if(c && c.currentHp>0) aliveEnemy.push({card:c,slot:s});
-    });
-    if(aliveEnemy.length===0){ endTurn(); return; }
-    aliveEnemy.sort((a,b)=> a.card.currentHp - b.card.currentHp);
-    let targetChoice = aliveEnemy[0];
-    const attackerCard = attackerChoice.card;
-    if(action==='active' && attackerCard.currentEnergy >= attackerCard.activeCost){
-      performAIAttackOrActive(attackerChoice, targetChoice, 'active');
-    } else {
-      if(attackerCard.currentEnergy >= 1){
-        performAIAttackOrActive(attackerChoice, targetChoice, 'attack');
-      } else if(attackerCard.currentEnergy >= attackerCard.activeCost && attackerCard.activeCost>0){
-        performAIAttackOrActive(attackerChoice, targetChoice, 'active');
-      } else {
-        endTurn();
-      }
-    }
-  }
-
-  function performAIAttackOrActive(attackerChoice, targetChoice, mode){
-    const aiIdx = 1;
-    const atk = attackerChoice.card;
-    const tgt = targetChoice.card;
-    if(mode==='attack'){
-      atk.currentEnergy -= 1;
-      state.players[aiIdx].exhausted[atk.id] = true;
-      tgt.currentHp -= atk.atk;
-      log(`AI ${atk.name} attacked ${tgt.name} for ${atk.atk}.`);
-      if(tgt.currentHp <= 0){ log(`${tgt.name} was defeated.`); killCard(0, tgt.id); }
-      renderCombatBoards();
-      updateCombatUI();
-      setTimeout(()=> endTurn(), 350);
-    } else if(mode==='active'){
-      if(atk.currentEnergy < atk.activeCost){ setTimeout(()=> endTurn(), 200); return; }
-      atk.currentEnergy -= atk.activeCost;
-      state.players[aiIdx].exhausted[atk.id] = true;
-      const desc = (atk.activeDesc||'').toLowerCase();
-      if(desc.includes('heal')){
-        const m = desc.match(/(\d+)/); const amount = m?parseInt(m[0],10):5;
-        let lowest = null;
-        ['primary','secondary','support'].forEach(s=>{
-          const c = state.players[aiIdx].formation[s];
-          if(c && c.currentHp>0 && (!lowest || c.currentHp < lowest.currentHp)) lowest = c;
-        });
-        if(lowest){ lowest.currentHp = Math.min(lowest.hp, lowest.currentHp + amount); log(`AI ${atk.name} healed ${lowest.name} for ${amount}.`); }
-      } else if(desc.includes('energize')){
-        const m = desc.match(/\+(\d+)/); const amount = m?parseInt(m[1],10):2;
-        atk.currentEnergy = Math.min(atk.energyMax, atk.currentEnergy + amount);
-        log(`AI ${atk.name} energized for +${amount}.`);
-      } else if(desc.includes('stun')){
-        const target = targetChoice.card;
-        state.players[0].statuses[target.id].stunned = true;
-        log(`AI ${atk.name} stunned ${target.name}.`);
-      } else if(desc.includes('drain')){
-        const m = desc.match(/(\d+)/); const amount = m?parseInt(m[0],10):2;
-        targetChoice.card.currentEnergy = Math.max(0, targetChoice.card.currentEnergy - amount);
-        log(`AI ${atk.name} drained ${amount} energy from ${targetChoice.card.name}.`);
-      } else {
-        log(`AI ${atk.name} used active.`);
-      }
-      renderCombatBoards();
-      updateCombatUI();
-      setTimeout(()=> endTurn(), 500);
-    }
-  }
-
-  // ---- Helpers ----
-  function killCard(playerIndex, cardId){
-    const f = state.players[playerIndex].formation;
-    for(const s of ['primary','secondary','support']) if(f[s] && f[s].id === cardId) f[s] = null;
-  }
-
-  // ---- Custom image / card support ----
-  addCustomBtn.addEventListener('click', ()=>{
-    const file = customImgInput.files[0];
-    const name = (customNameInput.value || '').trim();
-    const type = customTypeSelect.value || 'Normal';
-    if(!file) return alert('Select an image file');
-    if(!name) return alert('Enter a card name');
-    const url = URL.createObjectURL(file);
-    const customCard = {
-      name,
-      type,
-      hp: Math.max(10, Math.min(50, Math.floor(Math.random()*35)+12)),
-      atk: Math.max(6, Math.min(18, Math.floor(Math.random()*12)+6)),
-      energyMax: (Math.random() < 0.5) ? 2 : 3,
-      passive: 'Custom art',
-      activeCost: 1,
-      activeDesc: 'Small heal',
-      imgUrl: url,
-      id: 'custom-' + Math.random().toString(36).slice(2)
-    };
-    CUSTOM_CARDS.push(customCard);
-    alert('Custom card added to pool and will appear in future gardens.');
-    customImgInput.value = ''; customNameInput.value = '';
-  });
-
-  // small helper for debug: show current pool count
-  // ---- Init ----
-  log('Welcome to Overgrowth! Choose difficulty (or Two Player) to begin, then click Start Draft.');
-
-})();
-</script>
-</body>
-</html>
-
-
+      <div style={{textAlign:'center',marginTop:12,color:'#94a3b8'}}>Hand-made SVG cards • One action per turn • Side panel targeting/actions</div>
+    </div>
+  );
+}
