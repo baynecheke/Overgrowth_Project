@@ -1,450 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Overgrowth — Web Prototype</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;background:#0f172a;color:#e2e8f0}
+#app{max-width:1100px;margin:0 auto;padding:12px}
+header{display:flex;align-items:center;justify-content:space-between}
+h1{margin:8px 0}
+.pill{padding:4px 10px;border-radius:999px;background:#1e293b;opacity:.9;font-size:.9rem}
+main{margin-top:8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{border:0;padding:10px 14px;border-radius:10px;background:#22c55e;color:#062;cursor:pointer;font-weight:700}
+button[disabled]{opacity:.6;cursor:not-allowed;filter:grayscale(.3)}
+.card{width:160px;background:#111827;border:2px solid #334155;border-radius:12px;padding:8px;position:relative}
+.card .name{font-weight:700}
+.card .meta{font-size:.8rem;opacity:.8}
+.card .stats{display:flex;justify-content:space-between;margin-top:4px}
+.card .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tag{padding:2px 6px;border-radius:6px;background:#1f2937;font-size:.75rem}
+.card-row,.bench-row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+.garden-wrap{margin-top:10px;padding:8px;border:1px dashed #334155;border-radius:10px}
+.hidden{display:none}
+.hands .hand{flex:1;min-width:280px}
+.board{display:flex;gap:12px;margin:8px 0}
+.column{flex:1}
+.slot{min-height:180px;border:2px dashed #334155;border-radius:12px;padding:6px;display:flex;align-items:center;justify-content:center}
+.boards{display:grid;grid-template-columns:1fr;gap:12px}
+.active-row .slot{min-height:190px}
+#action-panel{margin-top:12px;padding:10px;border:1px solid #334155;border-radius:12px;background:#0b1220}
+#log{margin-top:10px;max-height:220px;overflow:auto;font-family:ui-monospace,monospace;background:#0a0f1b;padding:8px;border-radius:8px;font-size:.9rem}
+#turn-banner{padding:8px;border-radius:8px;background:#1f2937;margin-bottom:8px}
+footer{margin-top:16px;opacity:.7}
+.card.selectable{outline:2px solid #22c55e}
+.card.ai{border-color:#64748b}
+.slot.highlight{background:#0b1329}
+#status-line{margin:6px 0;opacity:.9}
+@media (min-width:900px){.boards{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🌿 Overgrowth</h1>
+    <div class="pill">v1.0 single-file prototype</div>
+  </header>
 
+  <main>
+    <section id="setup">
+      <h2>Gardening Phase</h2>
+      <div class="row">
+        <button id="btn-new">New Game</button>
+        <button id="btn-help">Help / Rules</button>
+      </div>
+      <div id="help" class="hidden">
+        <p>Draft from the Garden of 6 face-up cards. You and the AI draft until both have 6 cards.
+          The AI **draws all of its cards from the Garden** and completes its drafting automatically.</p>
+        <details>
+          <summary>Implemented rules</summary>
+          <ul>
+            <li>Types loop (Nocturnal &gt; Fungal &gt; Normal &gt; Thorn &gt; Water &gt; Sun &gt; Nocturnal), +10 on direct attacks.</li>
+            <li>Energy/exhaustion: Attack costs 1 EN; actives cost listed EN; at 0 EN you are exhausted next turn, then refill.</li>
+            <li>Formations: Primary, Secondary, Support; Bench x3. Bench enters with full energy; bench energy not tracked.</li>
+            <li>Statuses: Stunned, Rooted, Weakened, Burned, Poisoned X, Cover, Anchor (cannot move).</li>
+            <li>Swap penalties: 1 swap → only one frontline attack at half dmg; 2 swaps → no frontline attacks.</li>
+            <li>Victory: defeat all enemy plants.</li>
+          </ul>
+        </details>
+      </div>
 
+      <div class="garden-wrap">
+        <h3>Garden (6 face-up)</h3>
+        <div id="garden" class="card-row"></div>
+        <div class="row">
+          <button id="btn-flip" disabled>Flip / Refill Garden</button>
+        </div>
+      </div>
 
-import React, { useEffect, useState } from 'react';
+      <div class="row hands">
+        <div class="hand">
+          <h3>Your Drafted Cards (<span id="phc">0</span>/6)</h3>
+          <div id="pHand" class="card-row"></div>
+        </div>
+        <div class="hand">
+          <h3>AI Drafted (hidden)</h3>
+          <div id="aHand" class="card-row hidden"></div>
+        </div>
+      </div>
+      <div class="row">
+        <button id="btn-arrange" disabled>Finish Drafting & Arrange</button>
+      </div>
+    </section>
 
-// Overgrowth — Single-file React app
-// Simplified: Single-player vs AI, Pokémon-style layout, one action per turn (your Primary),
-// step-by-step instruction bar, 6s loading screen, no drafting/login/multiplayer.
+    <section id="formation" class="hidden">
+      <h2>Arrange Formation</h2>
+      <p>Tap a card in your hand then tap a slot. Fill Primary, Secondary, and Support; the rest go to Bench.</p>
+      <div class="board">
+        <div class="column"><h4>Support</h4><div class="slot" data-slot="player-support"></div></div>
+        <div class="column"><h4>Primary</h4><div class="slot" data-slot="player-primary"></div></div>
+        <div class="column"><h4>Secondary</h4><div class="slot" data-slot="player-secondary"></div></div>
+      </div>
+      <h4>Bench (auto from remaining)</h4>
+      <div id="player-bench-setup" class="bench-row"></div>
+      <div class="row"><button id="btn-begin" disabled>Begin Combat</button></div>
+    </section>
 
-// --- Sample card pool ---
-const SAMPLE_CARDS = [
-  { id: 'S1', name: 'Moonvine', type: 'Nocturnal', energy: 2, hp: 30, atk: 12, passive: 'Night Surge' },
-  { id: 'S2', name: 'Shroomguard', type: 'Fungal',    energy: 3, hp: 40, atk: 8,  passive: 'Tough Spores' },
-  { id: 'S3', name: 'Brambleback', type: 'Thorn',     energy: 2, hp: 50, atk: 10, passive: 'Thorny' },
-  { id: 'S4', name: 'Riverling',   type: 'Water',     energy: 2, hp: 28, atk: 14, passive: 'Hydrated' },
-  { id: 'S5', name: 'Sunpetal',    type: 'Sun',       energy: 2, hp: 26, atk: 13, passive: 'Photosynth' },
-  { id: 'S6', name: 'Rootkin',     type: 'Normal',    energy: 1, hp: 22, atk: 9,  passive: 'Versatile' },
+    <section id="combat" class="hidden">
+      <h2>Combat Phase</h2>
+      <div id="turn-banner"></div>
+      <div class="boards">
+        <div class="side">
+          <h3>AI</h3>
+          <div class="row active-row">
+            <div class="slot" data-slot="ai-support"></div>
+            <div class="slot" data-slot="ai-primary"></div>
+            <div class="slot" data-slot="ai-secondary"></div>
+          </div>
+          <div id="ai-bench" class="bench-row"></div>
+        </div>
+        <div class="side">
+          <h3>You</h3>
+          <div class="row active-row">
+            <div class="slot" data-slot="player-support"></div>
+            <div class="slot" data-slot="player-primary"></div>
+            <div class="slot" data-slot="player-secondary"></div>
+          </div>
+          <div id="player-bench" class="bench-row"></div>
+        </div>
+      </div>
+
+      <div id="action-panel">
+        <h3>Your Actions</h3>
+        <div id="status-line"></div>
+        <div class="row">
+          <button id="btn-ap" disabled>Attack (Primary)</button>
+          <button id="btn-as" disabled>Attack (Secondary)</button>
+        </div>
+        <div class="row">
+          <button id="btn-pp" disabled>Use Active (Primary)</button>
+          <button id="btn-ps" disabled>Use Active (Secondary)</button>
+          <button id="btn-pu" disabled>Use Active (Support)</button>
+        </div>
+        <div class="row">
+          <button id="btn-swap" disabled>Swap / Reorder</button>
+          <button id="btn-end" disabled>End Turn</button>
+        </div>
+        <div id="log"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>© Overgrowth prototype — single HTML file for GitHub Pages</footer>
+</div>
+
+<script>
+/* =========================
+   Overgrowth — Single-file Web Prototype
+   =========================
+   - AI drafts all of its cards from the Garden and completes drafting automatically.
+   - Turn-based combat with Energy & Exhaustion, statuses, swap penalties.
+   - Type advantage loop applied on direct attacks only (+10).
+   - Mobile-friendly taps; no drag & drop required.
+*/
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+/* -------- Card DB (seed set, auto-extended) -------- */
+const TYPES = ["Sun","Water","Thorn","Fungal","Normal","Nocturnal"];
+const ADV = { Nocturnal:"Fungal", Fungal:"Normal", Normal:"Thorn", Thorn:"Water", Water:"Sun", Sun:"Nocturnal" };
+
+const BASE = [
+  {name:"Solar Sprout", type:"Sun", rarity:"Common", energy:2, hp:30, atk:10, passive:{kind:"burnShield",text:"-10 from next hit if fresh"}, active:{cost:2,kind:"energize",value:1,target:"ally",text:"Energize ally +1"}},
+  {name:"Helio Bloom", type:"Sun", rarity:"Uncommon", energy:3, hp:35, atk:12, passive:{kind:"atkAura",value:2,text:"+2 ATK to adjacent"}, active:{cost:2,kind:"burn",value:1,target:"enemy",text:"Burn: +10 taken next hit"}},
+  {name:"Dawn Cactus", type:"Sun", rarity:"Rare", energy:3, hp:40, atk:12, passive:{kind:"anchor",text:"Anchor"}, active:{cost:3,kind:"heal",value:10,target:"ally",text:"Heal 10"}},
+
+  {name:"Brook Lily", type:"Water", rarity:"Common", energy:2, hp:28, atk:10, passive:{kind:"burnImmune",text:"Immune to Burn"}, active:{cost:2,kind:"heal",value:8,target:"ally",text:"Heal 8"}},
+  {name:"Tide Fern", type:"Water", rarity:"Uncommon", energy:3, hp:32, atk:12, passive:{kind:"vitalize",value:1,text:"On start: give +1 EN to ally"}, active:{cost:2,kind:"stun",value:1,target:"enemy",text:"Stun 1"}},
+  {name:"Abyss Lotus", type:"Water", rarity:"Rare", energy:3, hp:36, atk:12, passive:{kind:"regen",value:3,text:"End turn: regen 3"}, active:{cost:3,kind:"poison",value:2,target:"enemy",text:"Poison 2"}},
+
+  {name:"Bramble Guard", type:"Thorn", rarity:"Common", energy:2, hp:40, atk:10, passive:{kind:"thorns",value:5,text:"Reflect 5 on hit"}, active:{cost:2,kind:"cover",value:5,target:"ally",text:"Cover -5"}},
+  {name:"Spine Oak", type:"Thorn", rarity:"Uncommon", energy:3, hp:45, atk:12, passive:{kind:"fortify",value:5,text:"Shield 5 at start"}, active:{cost:3,kind:"root",value:1,target:"enemy",text:"Root 1"}},
+  {name:"Citadel Briar", type:"Thorn", rarity:"Rare", energy:3, hp:50, atk:12, passive:{kind:"anchor",text:"Anchor"}, active:{cost:2,kind:"energize",value:2,target:"ally",text:"Energize +2"}},
+
+  {name:"Myco Puff", type:"Fungal", rarity:"Common", energy:2, hp:30, atk:10, passive:{kind:"spores",value:2,text:"20% weaken on hit"}, active:{cost:2,kind:"poison",value:1,target:"enemy",text:"Poison 1"}},
+  {name:"Glow Cap", type:"Fungal", rarity:"Uncommon", energy:3, hp:32, atk:12, passive:{kind:"nightAlly",value:2,text:"+2 ATK if Nocturnal ally"}, active:{cost:2,kind:"seed",value:1,target:"self",text:"Seed 1"}},
+  {name:"Rot Lord", type:"Fungal", rarity:"Rare", energy:3, hp:38, atk:12, passive:{kind:"decay",value:2,text:"+2 damage taken by enemies"}, active:{cost:3,kind:"drain",value:1,target:"enemy",text:"Drain 1 EN (Primary)"}},
+
+  {name:"Meadow Bud", type:"Normal", rarity:"Common", energy:2, hp:30, atk:12, passive:{kind:"balanced",text:"—"}, active:{cost:2,kind:"heal",value:6,target:"ally",text:"Heal 6"}},
+  {name:"Field Rowan", type:"Normal", rarity:"Uncommon", energy:3, hp:34, atk:12, passive:{kind:"chain",text:"Chain display"}, active:{cost:2,kind:"energize",value:1,target:"ally",text:"Energize +1"}},
+  {name:"Highland Birch", type:"Normal", rarity:"Rare", energy:3, hp:36, atk:14, passive:{kind:"steadfast",value:2,text:"-2 dmg from attacks"}, active:{cost:3,kind:"weaken",value:1,target:"enemy",text:"Weaken -5 next"}},
+
+  {name:"Night Shade", type:"Nocturnal", rarity:"Common", energy:2, hp:28, atk:12, passive:{kind:"evasive",value:10,text:"10% dodge"}, active:{cost:2,kind:"stun",value:1,target:"enemy",text:"Stun 1"}},
+  {name:"Moon Orchid", type:"Nocturnal", rarity:"Uncommon", energy:3, hp:32, atk:12, passive:{kind:"shadowAtk",value:2,text:"+2 first strike (flavor)"}, active:{cost:2,kind:"energize",value:2,target:"self",text:"Self +2 EN"}},
+  {name:"Eclipse Ivy", type:"Nocturnal", rarity:"Rare", energy:3, hp:34, atk:14, passive:{kind:"ambush",value:4,text:"+4 first attack"}, active:{cost:3,kind:"seed",value:1,target:"self",text:"Seed 1"}}
 ];
 
-const TYPE_ORDER = ['Nocturnal', 'Fungal', 'Normal', 'Thorn', 'Water', 'Sun'];
-
-function uid(prefix = 'id') { return prefix + '_' + Math.random().toString(36).slice(2,9); }
-function shuffle(arr){ const a = arr.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
-function makeCardRuntime(c){ return ({...c, uid: uid('card'), currentHP: c.hp, maxHP: c.hp, energyCur: c.energy, exhausted:false, atkMod:0}); }
-function buildDeck(){
-  const pool = [];
-  for(let r=0;r<3;r++) for(const c of SAMPLE_CARDS) pool.push({...c});
-  return shuffle(pool).map(makeCardRuntime);
-}
-function typeHasAdvantage(att, def){ const a = TYPE_ORDER.indexOf(att); const d = TYPE_ORDER.indexOf(def); return (a + TYPE_ORDER.length - d) % TYPE_ORDER.length === 1; }
-
-// Inject CSS (single-file; no external CSS)
-function injectCSS(){ if(typeof document==='undefined') return; const id='og-styles'; if(document.getElementById(id)) return; const css=`
-:root{ --bg:#071024; --panel:rgba(255,255,255,0.06); --muted:#94a3b8; --accent1:#34d399; --accent2:#60a5fa; }
-*{box-sizing:border-box}
-body{margin:0;font-family:Inter,system-ui,Arial;background:radial-gradient(1000px 500px at 10% -20%, #0b1b3a, transparent), linear-gradient(180deg,#071024,#0f172a);color:#e6eef8}
-.wrap{max-width:1200px;margin:18px auto;padding:16px}
-.header{display:flex;justify-content:space-between;align-items:center}
-.title{font-weight:800;font-size:28px;background:linear-gradient(90deg,#bbf7d0,#60a5fa);-webkit-background-clip:text;color:transparent}
-.subtitle{color:var(--muted);font-size:13px}
-.playmat{margin-top:14px;display:grid;grid-template-columns:1fr 360px;gap:14px}
-.panel{background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.06)}
-.leftcol{display:flex;flex-direction:column;gap:12px}
-.mat{padding:14px;border-radius:12px}
-.row{display:flex;justify-content:center;align-items:center;gap:12px}
-.active-slot{width:260px;height:160px}
-.bench-slot{width:140px;height:110px}
-.card-visual{width:100%;height:100%;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;border:1px solid rgba(255,255,255,0.08);cursor:pointer;background:rgba(2,6,23,0.5)}
-.card-visual.disabled{opacity:0.45;cursor:default}
-.sidepanel{width:340px;display:flex;flex-direction:column;gap:10px}
-.btn{padding:10px 12px;border-radius:10px;font-weight:700;cursor:pointer;border:none}
-.btn-primary{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#05264b}
-.btn-ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.14)}
-.btn-danger{background:linear-gradient(90deg,#fb7185,#f97316);color:#140808}
-.log{max-height:220px;overflow:auto;padding:8px;background:rgba(0,0,0,0.18);border-radius:10px}
-.select-highlight{outline:3px solid rgba(96,165,250,0.22);box-shadow:0 6px 18px rgba(96,165,250,0.06)}
-.center{display:flex;align-items:center;justify-content:center}
-.loading{height:60vh}
-.instruction{display:flex;gap:10px;align-items:center}
-.badge{font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.16)}
-.hr{height:10px}
-`;
- const s=document.createElement('style'); s.id=id; s.appendChild(document.createTextNode(css)); document.head.appendChild(s); }
-
-// Simple hand-made SVG type art
-function TypeArt({type}){
-  const commonStyle={width:'100%',height:'100%'};
-  if(type==='Sun') return (
-    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
-      <defs><linearGradient id="gSun" x1="0" x2="1"><stop offset="0" stopColor="#fffbeb"/><stop offset="1" stopColor="#f59e0b"/></linearGradient></defs>
-      <rect width="100%" height="100%" fill="#fffbeb" opacity="0.04"/>
-      <g transform="translate(100,60)">
-        <circle r="30" fill="url(#gSun)" stroke="#f97316" strokeWidth="3" />
-        <g stroke="#f97316" strokeWidth="3">
-          <line x1="-50" y1="0" x2="-20" y2="0" />
-          <line x1="50" y1="0" x2="20" y2="0" />
-          <line x1="0" y1="-40" x2="0" y2="-20" />
-          <line x1="0" y1="40" x2="0" y2="20" />
-        </g>
-      </g>
-    </svg>
-  );
-  if(type==='Water') return (
-    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" fill="#eff6ff" opacity="0.03"/>
-      <g transform="translate(100,60)">
-        <path d="M0 -40 C 28 -20, 28 10, 0 40 C -28 10, -28 -20, 0 -40 Z" fill="#60a5fa" stroke="#1e40af" strokeWidth="2"/>
-        <circle cx="6" cy="-6" r="3" fill="#bfdbfe" />
-      </g>
-    </svg>
-  );
-  if(type==='Thorn') return (
-    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" fill="#ecfdf5" opacity="0.02"/>
-      <g transform="translate(100,60)">
-        <path d="M-30 20 C -10 -20, 10 -20, 30 20 L 20 22 C 0 -6, -0 -6, -20 22 Z" fill="#4ade80" stroke="#166534" strokeWidth="2"/>
-        <line x1="-10" y1="-6" x2="-12" y2="-18" stroke="#166534" strokeWidth="2"/>
-        <line x1="10" y1="-6" x2="12" y2="-18" stroke="#166534" strokeWidth="2"/>
-      </g>
-    </svg>
-  );
-  if(type==='Fungal') return (
-    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" fill="#fff7ed" opacity="0.02"/>
-      <g transform="translate(100,60)">
-        <ellipse rx="34" ry="18" fill="#fb7185" stroke="#7f1d1d"/>
-        <rect x="-10" y="-2" width="20" height="36" rx="6" fill="#a16207" />
-        <circle cx="-10" cy="-6" r="3" fill="#fecaca" />
-        <circle cx="4" cy="-10" r="2.5" fill="#fecaca" />
-      </g>
-    </svg>
-  );
-  if(type==='Normal') return (
-    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" fill="#f0fdf4" opacity="0.02"/>
-      <g transform="translate(100,60)">
-        <path d="M-30 6 C -10 -26, 10 -26, 30 6 C 10 18, -10 18, -30 6 Z" fill="#86efac" stroke="#14532d" strokeWidth="1.5"/>
-        <line x1="-8" y1="-6" x2="8" y2="6" stroke="#14532d" strokeWidth="1"/>
-      </g>
-    </svg>
-  );
-  // Nocturnal
-  return (
-    <svg viewBox="0 0 200 140" style={commonStyle} xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" fill="#f5f3ff" opacity="0.02"/>
-      <g transform="translate(100,60)">
-        <circle r="20" fill="#a78bfa" />
-        <path d="M-36 -12 C -16 2, -6 10, 6 24 C 18 10, 28 2, 36 -12" stroke="#7c3aed" strokeWidth="2" fill="none" />
-      </g>
-    </svg>
-  );
+// extend to ~60+ cards by cloning variants
+let ALL = []; let idc=1;
+for (const b of BASE){
+  const push = (obj)=>{ ALL.push({...obj,id:idc++}); };
+  push(b);
+  const copies = b.rarity==="Common"?3 : b.rarity==="Uncommon"?2 : 1;
+  for(let i=0;i<copies;i++){
+    const v = {...b};
+    v.name = b.name+" +"+(i+1);
+    v.hp = b.hp + (i%2===0?2:0);
+    v.atk = b.atk + (i%2?1:0);
+    push(v);
+  }
 }
 
-// Card visual component
-function CardVisual({card, className, onClick}){
-  const disabled = !card || (card && card.currentHP <=0);
-  return (
-    <div className={`card-visual ${disabled? 'disabled':''} ${className||''}`} onClick={disabled?undefined:() => onClick && onClick(card)}>
-      <div style={{height:100, background:'#071a2b'}}>
-        {card ? <TypeArt type={card.type} /> : null}
-      </div>
-      <div style={{padding:8, display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-        <div>
-          <div style={{fontWeight:800}}>{card ? card.name : '—'}</div>
-          <div style={{fontSize:12,color:'var(--muted)'}}>{card ? `${card.type} • EN ${card.energyCur}` : ''}</div>
-        </div>
-        {card && (
-          <div style={{textAlign:'right'}}>
-            <div style={{fontWeight:800}}>{card.currentHP}</div>
-            <div style={{fontSize:12,color:'var(--muted)'}}>HP</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a;}
+const clone = o => JSON.parse(JSON.stringify(o));
+
+/* -------- Game State -------- */
+const G = {
+  phase:"draft",
+  deck:[],
+  garden:[],
+  player:{hand:[], formation:{primary:null,secondary:null,support:null,bench:[]}, acted:{}, swaps:0},
+  ai:{hand:[], formation:{primary:null,secondary:null,support:null,bench:[]}, acted:{}, swaps:0},
+  current:"player",
+  log:[]
+};
+
+function log(msg){ G.log.push(msg); renderLog(); }
+
+/* -------- UI bootstrap -------- */
+$("#btn-help").onclick = ()=> $("#help").classList.toggle("hidden");
+$("#btn-new").onclick = newGame;
+$("#btn-flip").onclick = flipOrRefill;
+$("#btn-arrange").onclick = endDraftToArrange;
+$("#btn-begin").onclick = beginCombat;
+
+$("#btn-ap").onclick = ()=> doAttack("player","primary");
+$("#btn-as").onclick = ()=> doAttack("player","secondary");
+$("#btn-pp").onclick = ()=> useActive("player","primary");
+$("#btn-ps").onclick = ()=> useActive("player","secondary");
+$("#btn-pu").onclick = ()=> useActive("player","support");
+$("#btn-swap").onclick = ()=> startSwapFlow();
+$("#btn-end").onclick = ()=> endTurn();
+
+/* -------- New Game / Drafting -------- */
+function newGame(){
+  Object.assign(G,{
+    phase:"draft",
+    deck:shuffle(ALL.map(clone)),
+    garden:[],
+    player:{hand:[], formation:{primary:null,secondary:null,support:null,bench:[]}, acted:{}, swaps:0},
+    ai:{hand:[], formation:{primary:null,secondary:null,support:null,bench:[]}, acted:{}, swaps:0},
+    current:"player",
+    log:[]
+  });
+  $("#setup").classList.remove("hidden");
+  $("#formation").classList.add("hidden");
+  $("#combat").classList.add("hidden");
+  $("#btn-flip").disabled = false;
+  $("#btn-arrange").disabled = true;
+  $("#phc").textContent = "0";
+  renderGarden();
+  renderHands();
+  log("🌱 New game. Flip to reveal the Garden.");
 }
 
-export default function App(){
-  injectCSS();
+function flipOrRefill(){
+  // always maintain 6 face-up for drafting (if deck allows)
+  while(G.garden.length<6 && G.deck.length>0){ G.garden.push(G.deck.pop()); }
+  $("#btn-flip").disabled = true;
+  log("🌼 Garden ready. Draft until both have 6. AI drafts automatically.");
+  // Begin auto-drafting flow: player taps cards; AI responds until both reach 6
+  renderGarden();
+}
 
-  // 6s loading screen
-  const [loading, setLoading] = useState(true);
-  useEffect(()=>{ const t = setTimeout(()=> setLoading(false), 6000); return ()=> clearTimeout(t); },[]);
+/* Player pick from garden */
+function pickFromGarden(idx){
+  if(G.phase!=="draft") return;
+  const c = G.garden.splice(idx,1)[0];
+  if(!c) return;
+  G.player.hand.push(c);
+  log(`You drafted ${c.name}.`);
+  refillGardenForDraft();
+  aiDraftUntilBalanced();
+  updateDraftButtons();
+  renderAll();
+}
 
-  // phases: 'menu' | 'battle' | 'result'
-  const [phase, setPhase] = useState('menu');
+function refillGardenForDraft(){
+  while(G.garden.length<6 && G.deck.length>0 && (G.player.hand.length<6 || G.ai.hand.length<6)){
+    G.garden.push(G.deck.pop());
+  }
+}
 
-  // game state
-  const [combat,setCombat] = useState(null); // { setups:[{primary, bench:[]},{primary, bench:[]}], turn:0 }
-  const [selected, setSelected] = useState(null); // {player:0, slot:'primary'}
-  const [mode, setMode] = useState(null); // 'attack' | 'support' | null
-  const [log,setLog] = useState([]);
+function aiDraftUntilBalanced(){
+  // AI drafts until it has either caught up to player's hand size
+  // OR until both reach 6; always from the Garden.
+  while(G.ai.hand.length < Math.min(G.player.hand.length,6)){
+    aiPickOnce();
+    refillGardenForDraft();
+  }
+  // If player already at 6, let AI finish to 6
+  while(G.player.hand.length>=6 && G.ai.hand.length<6){
+    aiPickOnce();
+    refillGardenForDraft();
+  }
+}
 
-  const appendLog = (m)=> setLog(l=>[m,...l].slice(0,120));
+function aiPickOnce(){
+  if(G.garden.length===0) return;
+  const ranked = G.garden.map((c,i)=>({c,i,score: aiScore(c)})).sort((a,b)=>b.score-a.score);
+  const pick = ranked[0];
+  const card = G.garden.splice(pick.i,1)[0];
+  G.ai.hand.push(card);
+  log(`🤖 AI drafted ${card.name}.`);
+}
 
-  // Utilities
-  function checkVictory(state){
-    const empty = (s)=> !s.primary && (!s.bench || s.bench.length===0);
-    const a = empty(state.setups[0]);
-    const b = empty(state.setups[1]);
-    if(a && b) return 'Draw';
-    if(b) return 'You Win!';
-    if(a) return 'You Lose';
-    return null;
+function aiScore(c){
+  let s = 0;
+  if(c.type==="Thorn") s+=3;
+  if(c.rarity==="Rare") s+=3;
+  if(c.rarity==="Uncommon") s+=1;
+  s += (c.hp/10)+(c.atk/5)+c.energy;
+  // prefer new types
+  const counts = {};
+  for(const h of G.ai.hand){ counts[h.type]=(counts[h.type]||0)+1; }
+  s += (counts[c.type]||0)==0 ? 2 : 0;
+  return s;
+}
+
+function updateDraftButtons(){
+  $("#phc").textContent = G.player.hand.length+"/6";
+  $("#btn-arrange").disabled = !(G.player.hand.length>=6 && G.ai.hand.length>=6);
+}
+
+function endDraftToArrange(){
+  G.phase="arrange";
+  $("#setup").classList.add("hidden");
+  $("#formation").classList.remove("hidden");
+  renderArrange();
+  aiArrange();
+}
+
+let selectedFromHand = null;
+function renderArrange(){
+  const hand = $("#pHand"); hand.innerHTML="";
+  G.player.hand.forEach((c,i)=>{
+    const el = renderCard(c);
+    el.classList.add("selectable");
+    el.onclick = ()=>{ selectedFromHand = {i}; highlightSlots(true); };
+    hand.appendChild(el);
+  });
+
+  $$(".slot[data-slot^='player-']").forEach(s=>{
+    s.innerHTML = "(empty)";
+    s.onclick = ()=>{
+      if(!selectedFromHand) return;
+      const role = s.dataset.slot.split("-")[1];
+      placeIntoRole(role, G.player.hand.splice(selectedFromHand.i,1)[0], "player");
+      selectedFromHand = null; highlightSlots(false); renderArrange();
+    };
+  });
+
+  // show what will go to bench
+  const benchHold = $("#player-bench-setup"); benchHold.innerHTML="";
+  G.player.hand.forEach(c=> benchHold.appendChild(renderMini(c)));
+
+  const ready = G.player.formation.primary && G.player.formation.secondary && G.player.formation.support;
+  $("#btn-begin").disabled = !ready || (G.player.hand.length!==3);
+}
+
+function highlightSlots(on){
+  $$(".slot[data-slot^='player-']").forEach(s => s.classList.toggle("highlight", !!on));
+}
+
+function placeIntoRole(role, card, side){
+  const u = initUnit(card);
+  const F = side==="player" ? G.player.formation : G.ai.formation;
+  F[role] = u;
+}
+
+function aiArrange(){
+  // simple: highest HP -> primary, highest ATK -> secondary, support = healer/energizer else highest EN
+  const picks = G.ai.hand.slice();
+  picks.sort((a,b)=>b.hp-a.hp); const P = initUnit(picks.shift());
+  picks.sort((a,b)=>b.atk-a.atk); const S = initUnit(picks.shift());
+  let idx = picks.findIndex(x=> x.active && (x.active.kind==="heal"||x.active.kind==="energize"));
+  if(idx<0) idx=0;
+  const U = initUnit(picks.splice(idx,1)[0]);
+  G.ai.formation = {primary:P, secondary:S, support:U, bench:picks.map(initUnit)};
+}
+
+function beginCombat(){
+  // move player's remaining to bench
+  const bench = G.player.hand.splice(0).map(initUnit);
+  G.player.formation.bench = bench;
+
+  $("#formation").classList.add("hidden");
+  $("#combat").classList.remove("hidden");
+  G.phase="combat";
+  G.current="player";
+  G.player.acted = {primary:false,secondary:false,support:false};
+  G.ai.acted = {primary:false,secondary:false,support:false};
+  G.player.swaps=0; G.ai.swaps=0;
+  log("⚔️ Combat begins! Your turn.");
+  updateTurnBanner();
+  renderCombatBoards();
+  enableActionButtons();
+}
+
+/* -------- Units / Status -------- */
+function initUnit(card){
+  if(!card) return null;
+  return {
+    ...clone(card),
+    curHP: card.hp, curEN: card.energy,
+    exhausted:false,
+    status:{stunned:0,rooted:0,weakened:0,burned:0,poisoned:0,cover:0,anchor:(card.passive&&card.passive.kind==="anchor")?1:0},
+    firstBonus:(card.passive&&card.passive.kind==="ambush")?(card.passive.value||0):0,
+    shield:(card.passive&&card.passive.kind==="fortify")?(card.passive.value||0):0
+  };
+}
+
+function unitAlive(u){ return u && u.curHP>0; }
+function unitCanAct(u){ return unitAlive(u) && !u.exhausted && u.status.stunned<=0; }
+
+/* -------- Rendering -------- */
+function renderGarden(){
+  const g = $("#garden"); g.innerHTML="";
+  G.garden.forEach((c,i)=>{
+    const el = renderCard(c);
+    if(G.phase==="draft") { el.classList.add("selectable"); el.onclick = ()=> pickFromGarden(i); }
+    g.appendChild(el);
+  });
+}
+
+function renderHands(){
+  const ph = $("#pHand"); if(ph){ ph.innerHTML=""; G.player.hand.forEach(c=> ph.appendChild(renderCard(c))); }
+  const ah = $("#aHand"); if(ah){ ah.innerHTML=""; G.ai.hand.forEach(c=> { const el=renderCard(c); el.classList.add("ai"); ah.appendChild(el);}); }
+}
+
+function renderCard(c){
+  const el = document.createElement("div"); el.className="card";
+  el.innerHTML = `
+    <div class="name">${c.name}</div>
+    <div class="meta">${c.type} • ${c.rarity}</div>
+    <div class="stats"><span>HP: ${c.hp}</span><span>ATK: ${c.atk}</span></div>
+    <div class="stats"><span>EN: ${c.energy}</span></div>
+    <div class="tags"><span class="tag">Passive: ${c.passive?c.passive.text:"—"}</span></div>
+    <div class="tags"><span class="tag">Active: ${c.active? c.active.text+" (cost "+c.active.cost+")":"—"}</span></div>`;
+  return el;
+}
+function renderMini(c){
+  const el = document.createElement("div"); el.className="card";
+  el.innerHTML = `<div class="name">${c.name}</div><div class="meta">${c.type}</div>`;
+  return el;
+}
+
+function renderCombatBoards(){
+  const PF = G.player.formation, AF = G.ai.formation;
+
+  function fill(selector, u){
+    const s = document.querySelector(`.slot[data-slot="${selector}"]`);
+    s.innerHTML = "";
+    if(!u){ s.textContent="(empty)"; return; }
+    const el = document.createElement("div"); el.className="card";
+    el.innerHTML = `
+      <div class="name">${u.name}</div>
+      <div class="meta">${u.type} • ${u.rarity}</div>
+      <div class="stats"><span>HP: ${u.curHP}</span><span>ATK: ${u.atk}</span></div>
+      <div class="stats"><span>EN: ${u.curEN}${u.exhausted?" (exhausted)":" "}</span></div>
+      <div class="tags">
+        ${u.status.stunned>0?'<span class="tag">Stunned</span>':""}
+        ${u.status.rooted>0?'<span class="tag">Rooted</span>':""}
+        ${u.status.weakened>0?'<span class="tag">Weakened</span>':""}
+        ${u.status.burned>0?'<span class="tag">Burned</span>':""}
+        ${u.status.poisoned>0?'<span class="tag">Poison '+u.status.poisoned+'</span>':""}
+        ${u.status.cover>0?'<span class="tag">Cover -'+u.status.cover+'</span>':""}
+        ${u.shield>0?'<span class="tag">Shield '+u.shield+'</span>':""}
+      </div>`;
+    s.appendChild(el);
   }
 
-  function supportEffect(sourceType, target){
-    if(!target) return 'No target';
-    if(sourceType==='Sun'){ const heal=6; target.currentHP = Math.min(target.currentHP + heal, target.maxHP); return `Healed ${heal} HP`; }
-    if(sourceType==='Water'){ target.energyCur = (target.energyCur||0)+1; return 'Gave +1 energy'; }
-    if(sourceType==='Thorn'){ target.atkMod = (target.atkMod||0)+2; return 'Granted +2 ATK'; }
-    if(sourceType==='Fungal'){ const heal=3; target.currentHP = Math.min(target.currentHP + heal, target.maxHP); target.energyCur=(target.energyCur||0)+1; return 'Healed 3 HP and +1 energy'; }
-    if(sourceType==='Normal'){ target.atkMod = (target.atkMod||0)+3; return 'Granted +3 ATK'; }
-    target.atkMod = (target.atkMod||0)+2; target.energyCur=(target.energyCur||0)+1; return 'Night boost: +2 ATK +1 energy';
-  }
+  fill("player-primary", PF.primary); fill("player-secondary", PF.secondary); fill("player-support", PF.support);
+  fill("ai-primary", AF.primary); fill("ai-secondary", AF.secondary); fill("ai-support", AF.support);
 
-  // Start a battle with pre-selected teams (no drafting)
-  function startBattle(){
-    const deck = buildDeck();
-    const yourTeam = [deck[0], deck[1], deck[2]];
-    const aiTeam   = [deck[3], deck[4], deck[5]];
-    const setups = [
-      { primary: makeCardRuntime(yourTeam[0]), bench: [makeCardRuntime(yourTeam[1]), makeCardRuntime(yourTeam[2])] },
-      { primary: makeCardRuntime(aiTeam[0]),   bench: [makeCardRuntime(aiTeam[1]),   makeCardRuntime(aiTeam[2])] }
-    ];
-    setCombat({setups, turn:0});
-    setPhase('battle');
-    setSelected(null); setMode(null); setLog([]);
-    appendLog('Battle started! Click your Primary to act.');
-  }
+  const pb = $("#player-bench"); pb.innerHTML="";
+  PF.bench.forEach(u=>{ const el=document.createElement("div"); el.className="card"; el.innerHTML=`<div class="name">${u.name}</div><div class="stats"><span>HP:${u.curHP}</span></div>`; pb.appendChild(el); });
+  const ab = $("#ai-bench"); ab.innerHTML="";
+  AF.bench.forEach(u=>{ const el=document.createElement("div"); el.className="card ai"; el.innerHTML=`<div class="name">${u.name}</div><div class="stats"><span>HP:${u.curHP}</span></div>`; ab.appendChild(el); });
+}
 
-  // perform attack from source to target
-  const executeAttack = (sourcePlayer, sourceSlot, targetPlayer, targetSlot)=>{
-    if(!combat) return;
-    const s = JSON.parse(JSON.stringify(combat));
-    const actor = s.setups[sourcePlayer][sourceSlot];
-    const target = s.setups[targetPlayer][targetSlot];
-    if(!actor || !target) { appendLog('Invalid attack'); return; }
-    if(actor.exhausted || actor.energyCur<1) { appendLog('Actor cannot act'); return; }
-    actor.energyCur -= 1; if(actor.energyCur<=0) actor.exhausted = true;
-    const baseAtk = actor.atk + (actor.atkMod||0);
-    let dmg = baseAtk + (typeHasAdvantage(actor.type, target.type)?10:0);
-    target.currentHP -= dmg;
-    appendLog(`${actor.name} attacked ${target.name} for ${dmg} damage`);
-    if(target.currentHP<=0){
-      appendLog(`${target.name} was defeated`);
-      if(targetSlot==='primary'){
-        s.setups[targetPlayer].primary = s.setups[targetPlayer].bench.shift()||null;
-      } else {
-        s.setups[targetPlayer][targetSlot]=null;
-      }
+function renderLog(){ const el=$("#log"); el.innerHTML = G.log.slice(-100).map(x=>`<div>${x}</div>`).join(""); el.scrollTop=el.scrollHeight; }
+function updateTurnBanner(){ $("#turn-banner").textContent = (G.current==="player"?"Your turn":"AI turn"); }
+function renderAll(){ renderGarden(); renderHands(); renderCombatBoards(); }
+
+/* -------- Actions / Combat -------- */
+function enableActionButtons(){
+  const F = G.player.formation;
+  const canP = unitCanAct(F.primary) && F.primary.curEN>=1;
+  const canS = unitCanAct(F.secondary) && F.secondary.curEN>=1;
+  const canPa = unitCanAct(F.primary) && F.primary.active && F.primary.curEN>=F.primary.active.cost;
+  const canSa = unitCanAct(F.secondary) && F.secondary.active && F.secondary.curEN>=F.secondary.active.cost;
+  const canUa = unitCanAct(F.support) && F.support.active && F.support.curEN>=F.support.active.cost;
+
+  const twoSwaps = G.player.swaps>=2;
+  $("#btn-ap").disabled = !canP || twoSwaps;
+  $("#btn-as").disabled = !canS || twoSwaps;
+  $("#btn-pp").disabled = !canPa;
+  $("#btn-ps").disabled = !canSa;
+  $("#btn-pu").disabled = !canUa;
+  $("#btn-swap").disabled = false;
+  $("#btn-end").disabled = false;
+  $("#status-line").textContent = "Act with Primary, Secondary, and Support (any order).";
+}
+
+function doAttack(side, role){
+  const F = side==="player"? G.player.formation : G.ai.formation;
+  const EF = side==="player"? G.ai.formation : G.player.formation;
+  const atk = F[role]; if(!unitCanAct(atk) || atk.curEN<1) return;
+
+  // target: attack opposing Primary by default
+  const def = EF.primary && unitAlive(EF.primary) ? EF.primary :
+              EF.secondary && unitAlive(EF.secondary) ? EF.secondary :
+              EF.support;
+
+  if(!def){ victory(side); return; }
+
+  let dmg = atk.atk + (atk.firstBonus||0);
+  if(ADV[atk.type]===def.type) dmg += 10; // type advantage on direct attack
+  if(atk.firstBonus) atk.firstBonus=0;
+
+  // swap penalty (half damage) if exactly one swap this turn from attacker side
+  const swaps = side==="player"? G.player.swaps : G.ai.swaps;
+  if(swaps===1 && (role==="primary" || role==="secondary")) dmg = Math.floor(dmg/2);
+
+  // defender modifiers
+  if(def.status.cover>0){ dmg = Math.max(0, dmg - def.status.cover); def.status.cover = 0; }
+  if(def.shield>0){ const ab=Math.min(def.shield,dmg); def.shield-=ab; dmg-=ab; }
+  if(def.passive&&def.passive.kind==="steadfast") dmg = Math.max(0, dmg - (def.passive.value||0));
+  if(atk.status.weakened>0){ dmg = Math.max(0, dmg - 5); atk.status.weakened=0; }
+
+  // burn makes next hit +10 received (unless Water w/ burnImmune)
+  if(def.status.burned>0 && !(def.passive&&def.passive.kind==="burnImmune")){ dmg+=10; def.status.burned=0; }
+
+  def.curHP -= Math.max(0,dmg);
+  atk.curEN -= 1;
+  log(`${label(side)} ${role} ${atk.name} hits ${label(side==="player"?"ai":"player")} Primary ${def.name} for ${dmg}.`);
+
+  // reactive effects
+  if(def.passive&&def.passive.kind==="thorns"){ atk.curHP -= (def.passive.value||0); log(`${def.name}'s Thorns deal ${(def.passive.value||0)} back.`); }
+  if(atk.passive&&atk.passive.kind==="spores" && Math.random()<0.2){ def.status.weakened=1; log(`${def.name} is Weakened (-5 next).`); }
+
+  postDamageCleanup();
+  endIfExhaustedCheck(atk);
+
+  renderCombatBoards(); enableActionButtons(); checkVictory();
+}
+
+function useActive(side, role){
+  const F = side==="player"? G.player.formation : G.ai.formation;
+  const EF = side==="player"? G.ai.formation : G.player.formation;
+  const u = F[role]; if(!unitCanAct(u) || !u.active || u.curEN<u.active.cost) return;
+
+  const a = u.active;
+  const spend = ()=>{ u.curEN -= a.cost; endIfExhaustedCheck(u); };
+
+  // simple target helpers
+  const ally = (t)=> (t==="self"? u : F.primary||F.secondary||F.support);
+  const enemyFront = ()=> EF.primary && unitAlive(EF.primary)? EF.primary : (EF.secondary&&unitAlive(EF.secondary)? EF.secondary : EF.support);
+
+  switch(a.kind){
+    case "heal":{
+      const tgt = ally(a.target);
+      if(!tgt) break;
+      const v = a.value||0; tgt.curHP = Math.min(tgt.hp, tgt.curHP+v);
+      log(`${u.name} heals ${tgt.name} for ${v}.`); spend(); break;
     }
-    setCombat(s);
-    const res = checkVictory(s); if(res){ setPhase('result'); appendLog('Result: '+res); return; }
-    setSelected(null); setMode(null);
-    if(sourcePlayer===0) setTimeout(()=> aiTakeTurn(), 480);
-  };
-
-  // execute support action: source helps ally target
-  const executeSupport = (sourcePlayer, sourceSlot, targetPlayer, targetSlot)=>{
-    if(!combat) return;
-    const s = JSON.parse(JSON.stringify(combat));
-    const actor = s.setups[sourcePlayer][sourceSlot];
-    const target = s.setups[targetPlayer][targetSlot];
-    if(!actor || !target){ appendLog('Invalid support'); return; }
-    if(actor.exhausted || actor.energyCur<1){ appendLog('Actor cannot act'); return; }
-    actor.energyCur -= 1; if(actor.energyCur<=0) actor.exhausted=true;
-    const desc = supportEffect(actor.type, target);
-    appendLog(`${actor.name} supported ${target.name}: ${desc}`);
-    setCombat(s);
-    setSelected(null); setMode(null);
-    if(sourcePlayer===0) setTimeout(()=> aiTakeTurn(), 480);
-  };
-
-  // AI turn: only AI primary acts
-  function aiTakeTurn(){
-    if(!combat) return;
-    const s = combat;
-    const ai = s.setups[1];
-    const me = s.setups[0];
-    const actor = ai.primary;
-    if(!actor || actor.exhausted || actor.energyCur<1){ appendLog('AI has no available actions'); return; }
-    // simple logic: heal/support if low HP, else attack
-    const doSupport = actor.currentHP < actor.maxHP/2 && Math.random()<0.45;
-    if(doSupport){ executeSupport(1, 'primary', 1, 'primary'); return; }
-    const targetSlot = me.primary? 'primary' : null; if(targetSlot){ executeAttack(1, 'primary', 0, targetSlot); }
+    case "energize":{
+      const tgt = a.target==="ally"? (F.primary||F.secondary||F.support) : u;
+      if(!tgt) break;
+      const v = a.value||1; tgt.curEN += v;
+      log(`${u.name} energizes ${tgt.name} +${v} EN.`); spend(); break;
+    }
+    case "stun":{
+      const tgt = enemyFront(); if(!tgt) break;
+      tgt.status.stunned = Math.max(tgt.status.stunned, (a.value||1));
+      log(`${u.name} stuns ${tgt.name} for ${a.value||1} turn.`); spend(); break;
+    }
+    case "poison":{
+      const tgt = enemyFront(); if(!tgt) break;
+      tgt.status.poisoned += (a.value||1);
+      log(`${u.name} poisons ${tgt.name} (${tgt.status.poisoned}).`); spend(); break;
+    }
+    case "burn":{
+      const tgt = enemyFront(); if(!tgt) break;
+      if(!(tgt.passive&&tgt.passive.kind==="burnImmune")) tgt.status.burned = 1;
+      log(`${u.name} applies Burn to ${tgt.name}.`); spend(); break;
+    }
+    case "weaken":{
+      const tgt = enemyFront(); if(!tgt) break;
+      tgt.status.weakened = 1;
+      log(`${u.name} weakens ${tgt.name} (-5 next).`); spend(); break;
+    }
+    case "cover":{
+      const tgt = ally("ally"); if(!tgt) break;
+      tgt.status.cover = Math.max(tgt.status.cover, a.value||5);
+      log(`${u.name} covers ${tgt.name} (-${tgt.status.cover} next hit).`); spend(); break;
+    }
+    case "root":{
+      const tgt = enemyFront(); if(!tgt) break;
+      tgt.status.rooted = Math.max(tgt.status.rooted, a.value||1);
+      log(`${u.name} roots ${tgt.name}.`); spend(); break;
+    }
+    case "drain":{
+      const tgt = EF.primary; if(!tgt) break;
+      const v = Math.min(tgt.curEN, (a.value||1));
+      tgt.curEN -= v; u.curEN += v; // transfer to user
+      log(`${u.name} drains ${v} EN from ${tgt.name}.`); spend(); break;
+    }
+    case "seed":{
+      // add a 10/10 seedling to bench with same type, 1 EN
+      const seed = {name:"Seedling", type:u.type, rarity:"Seed", energy:1, hp:10, atk:10,
+                    passive:null, active:null};
+      const su = initUnit(seed);
+      F.bench.push(su);
+      log(`${u.name} seeds a 10/10 ${u.type} on your bench.`); spend(); break;
+    }
   }
 
-  // Selection handlers — only your Primary can act
-  function onSelectPrimary(){ if(!combat) return; const card = combat.setups[0].primary; if(!card) return; if(card.exhausted||card.energyCur<1){ appendLog('Primary cannot act'); return; } setSelected({player:0, slot:'primary'}); setMode(null); }
-  function onClickEnemy(slot){ if(!selected || !mode) return; if(mode!=='attack') { appendLog('Tap Attack, then choose target'); return; } executeAttack(selected.player, selected.slot, 1, slot); }
-  function onClickAlly(slot){ if(!selected || !mode) return; if(mode!=='support'){ appendLog('Tap Support, then choose ally'); return; } executeSupport(selected.player, selected.slot, 0, slot); }
-
-  // Instruction bar (contextual)
-  function instructionText(){
-    if(phase==='menu') return 'Press Start Battle to jump in. No drafting — we pick teams for you!';
-    if(phase==='result') return 'Match complete. Press Restart to play again.';
-    if(!combat) return 'Loading battle...';
-    const you = combat.setups[0];
-    if(!selected) return 'Your turn: Click your Primary card (bottom center) to act.';
-    if(selected && !mode) return 'Choose an action: Attack (damage enemy) or Support (help an ally).';
-    if(mode==='attack') return 'Target: Click the enemy Primary (top center).';
-    if(mode==='support') return 'Target: Click your Primary to receive the support.';
-    return 'Your move!';
-  }
-
-  // Loading screen
-  if(loading){
-    return (
-      <div className="wrap center loading">
-        <div className="panel" style={{padding:24,textAlign:'center',minWidth:340}}>
-          <div className="title">Overgrowth</div>
-          <div className="subtitle" style={{marginTop:4}}>Growing the garden...</div>
-          <div style={{marginTop:16,height:8,background:'rgba(255,255,255,0.12)',borderRadius:999}}>
-            <div style={{height:8,width:'40%',background:'linear-gradient(90deg,var(--accent1),var(--accent2))',borderRadius:999,animation:'grow 1.2s infinite alternate'}} />
-          </div>
-          <style>{`@keyframes grow{from{width:20%}to{width:90%}}`}</style>
-        </div>
-      </div>
-    );
-  }
-
-  // Menu screen
-  if(phase==='menu'){
-    return (
-      <div className="wrap">
-        <div className="header">
-          <div>
-            <div className="title">Overgrowth</div>
-            <div className="subtitle">Single-player • Pokémon-style board • One action per turn</div>
-          </div>
-          <button className="btn btn-primary" onClick={startBattle}>Start Battle</button>
-        </div>
-        <div className="panel" style={{marginTop:14}}>
-          <div className="instruction"><span className="badge">Tutorial</span> {instructionText()}</div>
-        </div>
-        <div className="panel" style={{marginTop:12}}>
-          <div style={{fontWeight:700}}>How to play</div>
-          <ul style={{marginTop:8,lineHeight:1.6,color:'var(--muted)'}}>
-            <li>Click <b>Start Battle</b>. You and the AI each have 3 plants.</li>
-            <li>Your <b>Primary</b> (bottom center) is the only plant that acts each turn.</li>
-            <li>Click your Primary → choose <b>Attack</b> (deal damage) or <b>Support</b> (buff/heal).</li>
-            <li>Then click the target prompt that appears in the side panel.</li>
-            <li>When a plant is defeated, the next bench plant moves up automatically.</li>
-            <li>First side to lose all plants loses the match.</li>
-          </ul>
-        </div>
-      </div>
-    );
-  }
-
-  // Result screen
-  if(phase==='result'){
-    const outcome = checkVictory(combat) || 'Match Over';
-    return (
-      <div className="wrap">
-        <div className="header">
-          <div className="title">Overgrowth</div>
-          <div className="subtitle">{outcome}</div>
-          <div />
-        </div>
-        <div className="panel" style={{marginTop:14}}>
-          <div className="instruction"><span className="badge">Result</span> {outcome}</div>
-        </div>
-        <div className="panel" style={{marginTop:12,display:'flex',gap:8}}>
-          <button className="btn btn-primary" onClick={startBattle}>Restart</button>
-          <button className="btn btn-ghost" onClick={()=>{ setPhase('menu'); setCombat(null); setSelected(null); setMode(null); setLog([]); }}>Back to Menu</button>
-        </div>
-        <div className="panel" style={{marginTop:12}}>
-          <div style={{fontWeight:700, marginBottom:6}}>Battle Log</div>
-          <div className="log">{log.length? log.map((m,i)=> (<div key={i} style={{fontSize:13,opacity:0.9,marginBottom:4}}>{m}</div>)) : <div style={{color:'var(--muted)'}}>No events</div>}</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Battle screen
-  return (
-    <div className="wrap">
-      <div className="header">
-        <div>
-          <div className="title">Overgrowth</div>
-          <div className="subtitle">Single-player • One action per turn</div>
-        </div>
-        <div style={{display:'flex',gap:8}}>
-          <button className="btn btn-ghost" onClick={()=> setPhase('menu')}>Quit</button>
-          <button className="btn btn-primary" onClick={startBattle}>Restart</button>
-        </div>
-      </div>
-
-      <div className="panel" style={{marginTop:10}}>
-        <div className="instruction"><span className="badge">Step</span> {instructionText()}</div>
-      </div>
-
-      <div className="playmat">
-        <div className="leftcol">
-          <div className="panel mat">
-            {/* Opponent row (AI) */}
-            <div className="row">
-              <div className="active-slot">
-                <CardVisual card={combat?.setups?.[1]?.primary||null} onClick={()=>{}} />
-              </div>
-            </div>
-            <div className="row">
-              {Array.from({length:3}).map((_,i)=> (
-                <div key={i} className="bench-slot">
-                  <CardVisual card={combat?.setups?.[1]?.bench?.[i]||null} onClick={()=>{}} />
-                </div>
-              ))}
-            </div>
-
-            <div className="hr" />
-
-            {/* Player row */}
-            <div className="row">
-              <div className={`active-slot ${selected?.player===0 && selected?.slot==='primary' ? 'select-highlight':''}`} onClick={onSelectPrimary}>
-                <CardVisual card={combat?.setups?.[0]?.primary||null} onClick={onSelectPrimary} />
-              </div>
-            </div>
-            <div className="row">
-              {Array.from({length:3}).map((_,i)=> (
-                <div key={i} className="bench-slot">
-                  <CardVisual card={combat?.setups?.[0]?.bench?.[i]||null} onClick={()=>{}} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="panel sidepanel">
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            <div style={{fontWeight:800}}>Actions</div>
-            <div style={{color:'var(--muted)'}}>{selected? `Selected: Primary` : 'No selection'}</div>
-          </div>
-
-          <div style={{display:'flex',gap:8,marginTop:8}}>
-            <button className="btn btn-primary" onClick={()=> setMode('attack')} disabled={!combat || !combat.setups?.[0]?.primary}>Attack</button>
-            <button className="btn btn-primary" onClick={()=> setMode('support')} disabled={!combat || !combat.setups?.[0]?.primary}>Support</button>
-            <button className="btn btn-ghost" onClick={()=>{ setSelected(null); setMode(null); }}>Clear</button>
-          </div>
-          <div style={{marginTop:8,color:'var(--muted)'}}>Mode: {mode||'None'}</div>
-
-          <div className="hr" />
-
-          <div>
-            <div style={{fontWeight:700}}>Targets</div>
-            <div style={{display:'flex',flexDirection:'column',marginTop:8,gap:6}}>
-              <div style={{fontSize:13,color:'var(--muted)'}}>For Attack: click enemy Primary. For Support: click your Primary.</div>
-              <div className="btn btn-ghost" style={{textAlign:'center'}} onClick={()=> onClickEnemy('primary')}>
-                Enemy Primary: {combat?.setups?.[1]?.primary? combat.setups[1].primary.name : '—'}
-              </div>
-              <div className="btn btn-ghost" style={{textAlign:'center'}} onClick={()=> onClickAlly('primary')}>
-                Your Primary: {combat?.setups?.[0]?.primary? combat.setups[0].primary.name : '—'}
-              </div>
-            </div>
-          </div>
-
-          <div className="hr" />
-
-          <div>
-            <div style={{fontWeight:700}}>Battle Log</div>
-            <div className="log">{log.length? log.map((m,i)=> (<div key={i} style={{fontSize:13,opacity:0.9,marginBottom:4}}>{m}</div>)) : <div style={{color:'var(--muted)'}}>No events yet</div>}</div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{textAlign:'center',marginTop:12,color:'var(--muted)'}}>Hand-made SVG cards • Pokémon-style board • AI opponent • Tutorial steps above</div>
-    </div>
-  );
+  renderCombatBoards(); enableActionButtons(); checkVictory();
 }
+
+function startSwapFlow(){
+  // very simple: swap your Secondary and Support if allowed, or Primary<->Secondary if Support anchored etc.
+  // Real UI would let you pick; this keeps it one-button for mobile.
+  const F = G.player.formation;
+  if(F.support && F.support.status.anchor){ log("Support is anchored; trying Primary/Secondary."); }
+  if(F.primary && F.primary.status.anchor && F.secondary && F.secondary.status.anchor){ log("Anchored — cannot swap."); return; }
+
+  // try swap primary<->secondary first if not anchored
+  if(F.primary && F.secondary && !F.primary.status.anchor && !F.secondary.status.anchor){
+    [F.primary, F.secondary] = [F.secondary, F.primary];
+    G.player.swaps++;
+    log("You swapped Primary and Secondary.");
+  } else if (F.secondary && F.support && !F.support.status.anchor){
+    [F.secondary, F.support] = [F.support, F.secondary];
+    G.player.swaps++;
+    log("You swapped Secondary and Support.");
+  } else {
+    log("No valid swap available.");
+    return;
+  }
+
+  // Swapped-in bench units enter with full EN (handled when moved from bench in replacements)
+  renderCombatBoards(); enableActionButtons();
+}
+
+function endTurn(){
+  // Exhaustion management: if any unit reached 0 EN this turn, they become exhausted and skip next turn;
+  // at end of their skip, they refill to full.
+  applyEndOfTurnEffects("player");
+  G.current = "ai"; updateTurnBanner();
+  renderCombatBoards(); enableActionButtons();
+  setTimeout(aiTurn, 300); // quick handoff
+}
+
+function applyEndOfTurnEffects(side){
+  const F = side==="player"? G.player.formation : G.ai.formation;
+
+  // Regen & Vitalize passives
+  if(unitAlive(F.support) && F.support.passive && F.support.passive.kind==="vitalize"){
+    const target = F.primary && unitAlive(F.primary)? F.primary : F.secondary;
+    if(target){ target.curEN += (F.support.passive.value||1); log(`${label(side)} Support vitalizes ${target.name} +${F.support.passive.value||1} EN.`); }
+  }
+  if(unitAlive(F.primary) && F.primary.passive && F.primary.passive.kind==="regen"){
+    F.primary.curHP = Math.min(F.primary.hp, F.primary.curHP + (F.primary.passive.value||0));
+    log(`${label(side)} Primary regenerates ${(F.primary.passive.value||0)} HP.`);
+  }
+
+  // Poison damage tick
+  ["primary","secondary","support"].forEach(r=>{
+    const u = F[r]; if(!unitAlive(u)) return;
+    if(u.status.poisoned>0){
+      u.curHP -= 5;
+      u.status.poisoned--;
+      log(`${u.name} takes 5 poison damage (${u.status.poisoned} left).`);
+    }
+  });
+
+  // Exhaustion: if a unit had 0 EN at start of this turn (exhausted), it refills now and is no longer exhausted
+  ["primary","secondary","support"].forEach(r=>{
+    const u = F[r]; if(!u) return;
+    if(u.exhausted){
+      u.curEN = u.energy;
+      u.exhausted = false;
+      log(`${u.name} refreshes to full energy.`);
+    }
+    if(u.curEN<=0 && !u.exhausted){
+      u.exhausted = true; // will skip next turn; refills at next end
+    }
+  });
+
+  // Reset swap count
+  if(side==="player") G.player.swaps=0; else G.ai.swaps=0;
+
+  // Replace dead frontliners
+  handleReplacements(side);
+  checkVictory();
+}
+
+function handleReplacements(side){
+  const F = side==="player"? G.player.formation : G.ai.formation;
+  // replacement order: Secondary -> Primary; Support -> Secondary; Bench -> Support
+  if(!unitAlive(F.primary)){
+    if(unitAlive(F.secondary)){ F.primary = F.secondary; F.secondary = null; }
+    else if(unitAlive(F.support)){ F.primary = F.support; F.support = null; }
+  }
+  if(!unitAlive(F.secondary) && unitAlive(F.support)){ F.secondary = F.support; F.support = null; }
+  if(!unitAlive(F.support) && F.bench.length>0){
+    const inU = F.bench.shift();
+    // entering from bench: full energy
+    inU.curEN = inU.energy; inU.exhausted=false;
+    F.support = inU;
+  }
+}
+
+function endIfExhaustedCheck(u){
+  if(u.curEN<=0){ u.exhausted=true; }
+}
+
+function label(side){ return side==="player"?"You":"AI"; }
+
+function postDamageCleanup(){
+  // (placeholder for future combined effects)
+}
+
+function checkVictory(){
+  const P = G.player.formation, A = G.ai.formation;
+  const pAlive = [P.primary,P.secondary,P.support,...P.bench].some(unitAlive);
+  const aAlive = [A.primary,A.secondary,A.support,...A.bench].some(unitAlive);
+  if(!pAlive || !aAlive){
+    const winner = pAlive? "You win! 🌟" : "AI wins! 🤖";
+    log("Game over — " + winner);
+    $("#status-line").textContent = winner;
+    disableAllActions();
+  }
+}
+
+function disableAllActions(){
+  ["#btn-ap","#btn-as","#btn-pp","#btn-ps","#btn-pu","#btn-swap","#btn-end"].forEach(id=> $(id).disabled = true);
+}
+
+/* -------- AI Turn -------- */
+function aiTurn(){
+  if(G.phase!=="combat") return;
+  const F = G.ai.formation, E = G.player.formation;
+
+  // Basic AI plan per role:
+  // 1) If support can heal an injured ally or energize a key ally, use it.
+  // 2) If primary has energy, attack; else active if useful.
+  // 3) If secondary has energy, attack; else active if useful.
+  // 4) Occasionally swap to bring higher HP/ATK forward (if not anchored).
+
+  // Support active
+  if(unitCanAct(F.support) && F.support.active && F.support.curEN>=F.support.active.cost){
+    const a = F.support.active;
+    let did=false;
+    if(a.kind==="heal"){
+      const target = [F.primary,F.secondary,F.support].filter(x=>x).sort((a,b)=>(a.curHP/a.hp)-(b.curHP/b.hp))[0];
+      if(target && target.curHP<target.hp){
+        F.support.curEN -= a.cost; target.curHP = Math.min(target.hp, target.curHP + (a.value||6));
+        log(`🤖 ${F.support.name} heals ${target.name}.`); did=true;
+      }
+    } else if (a.kind==="energize"){
+      const target = F.primary && unitAlive(F.primary)? F.primary : F.secondary;
+      if(target){ F.support.curEN -= a.cost; target.curEN += (a.value||1); log(`🤖 ${F.support.name} energizes ${target.name}.`); did=true; }
+    } else if (["stun","poison","burn","weaken","cover","root","drain","seed"].includes(a.kind)){
+      // just use on default target/ally
+      useActive("ai","support"); did=true;
+    }
+    if(did) endIfExhaustedCheck(F.support);
+  }
+
+  // Maybe swap if primary is very low and secondary is healthier & not anchored
+  if(unitAlive(F.secondary) && unitAlive(F.primary) && !F.primary.status.anchor && !F.secondary.status.anchor){
+    if(F.primary.curHP < F.secondary.curHP/2 && G.ai.swaps<2){
+      [F.primary,F.secondary] = [F.secondary,F.primary];
+      G.ai.swaps++; log("🤖 AI swaps Primary and Secondary.");
+    }
+  }
+
+  // Primary action: attack preferred
+  if(unitCanAct(F.primary) && F.primary.curEN>=1){ doAttack("ai","primary"); }
+  else if(unitCanAct(F.primary) && F.primary.active && F.primary.curEN>=F.primary.active.cost){ useActive("ai","primary"); }
+
+  // Secondary action
+  if(unitCanAct(F.secondary) && F.secondary.curEN>=1){ doAttack("ai","secondary"); }
+  else if(unitCanAct(F.secondary) && F.secondary.active && F.secondary.curEN>=F.secondary.active.cost){ useActive("ai","secondary"); }
+
+  // End AI turn
+  applyEndOfTurnEffects("ai");
+  G.current="player"; updateTurnBanner();
+  renderCombatBoards(); enableActionButtons(); checkVictory();
+}
+
+/* -------- Helpers -------- */
+function renderArrangeToBenches(){
+  $("#player-bench-setup").innerHTML="";
+  G.player.hand.forEach(c=> $("#player-bench-setup").appendChild(renderMini(c)));
+}
+
+function renderArrangeSlots(){
+  $$(".slot[data-slot^='player-']").forEach(s=> s.innerHTML="(empty)");
+}
+
+function renderLogOnce(){ renderLog(); }
+
+function renderAllDraft(){ renderGarden(); renderHands(); }
+
+function renderAllCombat(){ renderCombatBoards(); enableActionButtons(); }
+
+function renderAll(){ renderGarden(); renderHands(); renderCombatBoards(); }
+
+/* -------- Start ---------- */
+newGame();
+</script>
+</body>
+</html>
