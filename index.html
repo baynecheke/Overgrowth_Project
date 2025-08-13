@@ -920,3 +920,177 @@ document.addEventListener("click", (e)=>{
 </script>
 </body>
 </html>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overgrowth</title>
+<style>
+body { font-family: Arial, sans-serif; background: #f0f8ff; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; }
+h1 { text-align: center; }
+#game { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 900px; }
+#garden, #playerHand, #battlefield, #aiBattlefield { display: flex; flex-wrap: wrap; justify-content: center; margin: 10px; }
+.card { width: 100px; height: 140px; border: 1px solid #333; border-radius: 8px; margin: 5px; background: #fff; position: relative; cursor: pointer; text-align: center; display: flex; flex-direction: column; justify-content: space-between; }
+.card img { width: 80px; height: 60px; margin: 5px auto 0 auto; }
+.card.hidden { background: #999; cursor: default; }
+.card .energy { position: absolute; top: 5px; right: 5px; font-weight: bold; background: #ffeb3b; padding: 2px 4px; border-radius: 3px; }
+.card .hp, .card .atk { font-weight: bold; }
+#log { width: 90%; height: 200px; border: 1px solid #333; overflow-y: scroll; background: #fff; padding: 5px; margin: 10px; }
+button { margin: 5px; padding: 5px 10px; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>Overgrowth</h1>
+<div id="game">
+  <div id="garden"></div>
+  <div id="playerHand"></div>
+  <div id="battlefield"></div>
+  <div id="aiBattlefield"></div>
+  <div>
+    <button id="startBattleBtn" disabled>Start Battle</button>
+    <button id="nextTurnBtn" disabled>Next Turn</button>
+  </div>
+  <div id="log"></div>
+</div>
+<script>
+// --- Card Model ---
+class Card {
+    constructor(name, type, rarity, hp, atk, energy, passive='', active='') {
+        this.name = name; this.type = type; this.rarity = rarity;
+        this.maxHp = hp; this.hp = hp; this.atk = atk;
+        this.energy = energy; this.maxEnergy = energy;
+        this.passive = passive; this.active = active;
+        this.status = []; this.role = null;
+        this.imgSrc = this.generateImage();
+    }
+    generateImage() {
+        const colors = {Sun:'#FFD700',Water:'#1E90FF',Thorn:'#228B22',Fungal:'#A52A2A',Normal:'#D3D3D3',Nocturnal:'#4B0082'};
+        const canvas = document.createElement('canvas'); canvas.width=80; canvas.height=60;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = colors[this.type]||'#fff'; ctx.fillRect(0,0,80,60);
+        ctx.fillStyle='#000'; ctx.font='10px Arial'; ctx.fillText(this.name, 5,30);
+        return canvas.toDataURL();
+    }
+}
+
+// --- Game Variables ---
+const types=['Sun','Water','Thorn','Fungal','Normal','Nocturnal'];
+const rarities=['Common','Uncommon','Rare','Legendary','Mythic'];
+let gardenDeck=[],garden=[],playerHand=[],aiHand=[],battlefield=[],aiBattlefield=[];
+let turn=0,logDiv=document.getElementById('log');
+
+// Generate 60+ cards
+for(let i=1;i<=60;i++){
+    let t=types[Math.floor(Math.random()*types.length)];
+    let r=rarities[Math.floor(Math.random()*rarities.length)];
+    let hp=Math.floor(Math.random()*20)+20, atk=Math.floor(Math.random()*10)+5;
+    let energy=Math.floor(Math.random()*3)+1;
+    gardenDeck.push(new Card(t+'Plant'+i,t,r,hp,atk,energy));
+}
+shuffle(gardenDeck);
+
+// --- Utilities ---
+function shuffle(array){for(let i=array.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[array[i],array[j]]=[array[j],array[i]];}}
+function log(msg){logDiv.innerHTML+=msg+'<br>'; logDiv.scrollTop=logDiv.scrollHeight;}
+
+// --- Garden / Draft ---
+function drawGarden(){garden=[];for(let i=0;i<6;i++){if(gardenDeck.length>0) garden.push(gardenDeck.pop());} renderGarden();}
+function renderGarden(){
+    const gardenDiv=document.getElementById('garden'); gardenDiv.innerHTML='';
+    garden.forEach((card,i)=>{
+        let div=document.createElement('div'); div.className='card';
+        div.innerHTML=`<div class="energy">${card.energy}</div>
+                       <img src="${card.imgSrc}" />
+                       <div>${card.name}</div>
+                       <div class="hp">HP:${card.hp}</div>
+                       <div class="atk">ATK:${card.atk}</div>`;
+        div.onclick=()=>pickCard(card,i); gardenDiv.appendChild(div);
+    });
+}
+function pickCard(card,index){
+    if(playerHand.length<6){ playerHand.push(card); garden.splice(index,1); renderHand(); renderGarden();
+        if(playerHand.length<6) drawGarden(); if(playerHand.length==6){ log('Draft finished. AI picks hand.'); pickAIHand(); } } }
+function renderHand(){
+    const handDiv=document.getElementById('playerHand'); handDiv.innerHTML='<h3>Your Hand</h3>';
+    playerHand.forEach(c=>{
+        let div=document.createElement('div'); div.className='card';
+        div.innerHTML=`<div class="energy">${c.energy}</div>
+                       <img src="${c.imgSrc}" />
+                       <div>${c.name}</div>
+                       <div class="hp">HP:${c.hp}</div>
+                       <div class="atk">ATK:${c.atk}</div>`; handDiv.appendChild(div);
+    });
+}
+
+// --- AI Draft ---
+function pickAIHand(){ aiHand=[]; while(aiHand.length<6 && gardenDeck.length>0){ aiHand.push(gardenDeck.pop()); }
+log('AI hand selected.'); document.getElementById('startBattleBtn').disabled=false; }
+
+// --- Battle Setup ---
+function startBattle(){ log('Battle start!');
+    battlefield = [playerHand[0],playerHand[1],playerHand[2]];
+    aiBattlefield = [aiHand[0],aiHand[1],aiHand[2]];
+    renderBattlefield();
+    document.getElementById('startBattleBtn').disabled=true;
+    document.getElementById('nextTurnBtn').disabled=false;
+}
+function renderBattlefield(){
+    const bfDiv=document.getElementById('battlefield'); bfDiv.innerHTML='<h3>Your Battlefield</h3>';
+    battlefield.forEach(c=>{
+        let div=document.createElement('div'); div.className='card';
+        div.innerHTML=`<div class="energy">${c.energy}</div>
+                       <img src="${c.imgSrc}" />
+                       <div>${c.name}</div>
+                       <div class="hp">HP:${c.hp}</div>
+                       <div class="atk">ATK:${c.atk}</div>`; bfDiv.appendChild(div);
+    });
+    const aibfDiv=document.getElementById('aiBattlefield'); aibfDiv.innerHTML='<h3>Enemy Battlefield</h3>';
+    aiBattlefield.forEach(c=>{
+        let div=document.createElement('div'); div.className='card hidden';
+        div.innerHTML=`<div class="energy">?</div>
+                       <img src="" />
+                       <div>Hidden</div>
+                       <div class="hp">HP:?</div>
+                       <div class="atk">ATK:?</div>`; aibfDiv.appendChild(div);
+    });
+}
+
+// --- Battle Turn ---
+document.getElementById('startBattleBtn').onclick=startBattle;
+document.getElementById('nextTurnBtn').onclick=nextTurn;
+
+function nextTurn(){ if(turn==0){ playerAttack(); turn=1; } else { aiAttack(); turn=0; } renderBattlefield(); checkVictory(); }
+
+function playerAttack(){ if(battlefield.length>0 && aiBattlefield.length>0){
+    let attacker=battlefield[0], defender=aiBattlefield[0];
+    let damage=attacker.atk+typeAdvantage(attacker.type,defender.type);
+    defender.hp-=damage;
+    log(`Player ${attacker.name} attacks AI ${defender.name} for ${damage} damage.`);
+    if(defender.hp<=0){ aiBattlefield.shift(); log(`AI ${defender.name} defeated!`); }
+}}
+
+function aiAttack(){ if(aiBattlefield.length>0 && battlefield.length>0){
+    // Aggressive if player HP high, defensive if player low
+    let attacker=aiBattlefield[0]; let defender=battlefield[0];
+    let damage=attacker.atk+typeAdvantage(attacker.type,defender.type);
+    defender.hp-=damage;
+    log(`AI ${attacker.name} attacks Player ${defender.name} for ${damage} damage.`);
+    if(defender.hp<=0){ battlefield.shift(); log(`Player ${defender.name} defeated!`); }
+}}
+
+// --- Type Advantage ---
+function typeAdvantage(att,defend){ const adv={Nocturnal:'Fungal',Fungal:'Normal',Normal:'Thorn',Thorn:'Water',Water:'Sun',Sun:'Nocturnal'};
+    return adv[att]==defend?10:0;
+}
+
+// --- Victory Check ---
+function checkVictory(){ if(battlefield.length==0){ log('AI Wins!'); document.getElementById('nextTurnBtn').disabled=true; }
+else if(aiBattlefield.length==0){ log('Player Wins!'); document.getElementById('nextTurnBtn').disabled=true; } }
+
+// --- Start ---
+drawGarden();
+</script>
+</body>
+</html>o
