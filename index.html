@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Overgrowth — Web Prototype</title>
+<title>Overgrowth — Web Prototype (Smarter AI)</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;background:#0f172a;color:#e2e8f0}
@@ -45,7 +45,7 @@ footer{margin-top:16px;opacity:.7}
 <div id="app">
   <header>
     <h1>🌿 Overgrowth</h1>
-    <div class="pill">v1.0 single-file prototype</div>
+    <div class="pill">v1.2 — smarter AI merged (single file)</div>
   </header>
 
   <main>
@@ -64,8 +64,8 @@ footer{margin-top:16px;opacity:.7}
             <li>Types loop (Nocturnal &gt; Fungal &gt; Normal &gt; Thorn &gt; Water &gt; Sun &gt; Nocturnal), +10 on direct attacks.</li>
             <li>Energy/exhaustion: Attack costs 1 EN; actives cost listed EN; at 0 EN you are exhausted next turn, then refill.</li>
             <li>Formations: Primary, Secondary, Support; Bench x3. Bench enters with full energy; bench energy not tracked.</li>
-            <li>Statuses: Stunned, Rooted, Weakened, Burned, Poisoned X, Cover, Anchor (cannot move).</li>
-            <li>Swap penalties: 1 swap → only one frontline attack at half dmg; 2 swaps → no frontline attacks.</li>
+            <li>Statuses: Stunned, Rooted, Weakened, Burned, Poisoned X, Cover, Anchor.</li>
+            <li>Swap penalties: 1 swap → frontline attacks at half dmg; 2 swaps → no frontline attacks that turn.</li>
             <li>Victory: defeat all enemy plants.</li>
           </ul>
         </details>
@@ -157,18 +157,14 @@ footer{margin-top:16px;opacity:.7}
 
 <script>
 /* =========================
-   Overgrowth — Single-file Web Prototype
-   =========================
-   - AI drafts all of its cards from the Garden and completes drafting automatically.
-   - Turn-based combat with Energy & Exhaustion, statuses, swap penalties.
-   - Type advantage loop applied on direct attacks only (+10).
-   - Mobile-friendly taps; no drag & drop required.
-*/
+   Overgrowth — Single-file Web Prototype (v1.2)
+   - Smarter AI integrated into the original single file.
+   ========================= */
 
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 
-/* -------- Card DB (seed set, auto-extended) -------- */
+/* -------- Card DB -------- */
 const TYPES = ["Sun","Water","Thorn","Fungal","Normal","Nocturnal"];
 const ADV = { Nocturnal:"Fungal", Fungal:"Normal", Normal:"Thorn", Thorn:"Water", Water:"Sun", Sun:"Nocturnal" };
 
@@ -178,8 +174,8 @@ const BASE = [
   {name:"Dawn Cactus", type:"Sun", rarity:"Rare", energy:3, hp:40, atk:12, passive:{kind:"anchor",text:"Anchor"}, active:{cost:3,kind:"heal",value:10,target:"ally",text:"Heal 10"}},
 
   {name:"Brook Lily", type:"Water", rarity:"Common", energy:2, hp:28, atk:10, passive:{kind:"burnImmune",text:"Immune to Burn"}, active:{cost:2,kind:"heal",value:8,target:"ally",text:"Heal 8"}},
-  {name:"Tide Fern", type:"Water", rarity:"Uncommon", energy:3, hp:32, atk:12, passive:{kind:"vitalize",value:1,text:"On start: give +1 EN to ally"}, active:{cost:2,kind:"stun",value:1,target:"enemy",text:"Stun 1"}},
-  {name:"Abyss Lotus", type:"Water", rarity:"Rare", energy:3, hp:36, atk:12, passive:{kind:"regen",value:3,text:"End turn: regen 3"}, active:{cost:3,kind:"poison",value:2,target:"enemy",text:"Poison 2"}},
+  {name:"Tide Fern", type:"Water", rarity:"Uncommon", energy:3, hp:32, atk:12, passive:{kind:"vitalize",value:1,text:"End: ally +1 EN"}, active:{cost:2,kind:"stun",value:1,target:"enemy",text:"Stun 1"}},
+  {name:"Abyss Lotus", type:"Water", rarity:"Rare", energy:3, hp:36, atk:12, passive:{kind:"regen",value:3,text:"End: regen 3"}, active:{cost:3,kind:"poison",value:2,target:"enemy",text:"Poison 2"}},
 
   {name:"Bramble Guard", type:"Thorn", rarity:"Common", energy:2, hp:40, atk:10, passive:{kind:"thorns",value:5,text:"Reflect 5 on hit"}, active:{cost:2,kind:"cover",value:5,target:"ally",text:"Cover -5"}},
   {name:"Spine Oak", type:"Thorn", rarity:"Uncommon", energy:3, hp:45, atk:12, passive:{kind:"fortify",value:5,text:"Shield 5 at start"}, active:{cost:3,kind:"root",value:1,target:"enemy",text:"Root 1"}},
@@ -194,22 +190,22 @@ const BASE = [
   {name:"Highland Birch", type:"Normal", rarity:"Rare", energy:3, hp:36, atk:14, passive:{kind:"steadfast",value:2,text:"-2 dmg from attacks"}, active:{cost:3,kind:"weaken",value:1,target:"enemy",text:"Weaken -5 next"}},
 
   {name:"Night Shade", type:"Nocturnal", rarity:"Common", energy:2, hp:28, atk:12, passive:{kind:"evasive",value:10,text:"10% dodge"}, active:{cost:2,kind:"stun",value:1,target:"enemy",text:"Stun 1"}},
-  {name:"Moon Orchid", type:"Nocturnal", rarity:"Uncommon", energy:3, hp:32, atk:12, passive:{kind:"shadowAtk",value:2,text:"+2 first strike (flavor)"}, active:{cost:2,kind:"energize",value:2,target:"self",text:"Self +2 EN"}},
+  {name:"Moon Orchid", type:"Nocturnal", rarity:"Uncommon", energy:3, hp:32, atk:12, passive:{kind:"shadowAtk",value:2,text:"+2 first strike"}, active:{cost:2,kind:"energize",value:2,target:"self",text:"Self +2 EN"}},
   {name:"Eclipse Ivy", type:"Nocturnal", rarity:"Rare", energy:3, hp:34, atk:14, passive:{kind:"ambush",value:4,text:"+4 first attack"}, active:{cost:3,kind:"seed",value:1,target:"self",text:"Seed 1"}}
 ];
 
-// extend to ~60+ cards by cloning variants
+// expand to ~60+ cards with slight variants
 let ALL = []; let idc=1;
 for (const b of BASE){
-  const push = (obj)=>{ ALL.push({...obj,id:idc++}); };
-  push(b);
+  const add = (o)=>ALL.push({...o,id:idc++});
+  add(b);
   const copies = b.rarity==="Common"?3 : b.rarity==="Uncommon"?2 : 1;
   for(let i=0;i<copies;i++){
     const v = {...b};
     v.name = b.name+" +"+(i+1);
     v.hp = b.hp + (i%2===0?2:0);
     v.atk = b.atk + (i%2?1:0);
-    push(v);
+    add(v);
   }
 }
 
@@ -228,6 +224,7 @@ const G = {
 };
 
 function log(msg){ G.log.push(msg); renderLog(); }
+function label(side){ return side==="player"?"You":"AI"; }
 
 /* -------- UI bootstrap -------- */
 $("#btn-help").onclick = ()=> $("#help").classList.toggle("hidden");
@@ -267,15 +264,13 @@ function newGame(){
 }
 
 function flipOrRefill(){
-  // always maintain 6 face-up for drafting (if deck allows)
   while(G.garden.length<6 && G.deck.length>0){ G.garden.push(G.deck.pop()); }
   $("#btn-flip").disabled = true;
   log("🌼 Garden ready. Draft until both have 6. AI drafts automatically.");
-  // Begin auto-drafting flow: player taps cards; AI responds until both reach 6
   renderGarden();
 }
 
-/* Player pick from garden */
+// Player picks from Garden
 function pickFromGarden(idx){
   if(G.phase!=="draft") return;
   const c = G.garden.splice(idx,1)[0];
@@ -295,39 +290,42 @@ function refillGardenForDraft(){
 }
 
 function aiDraftUntilBalanced(){
-  // AI drafts until it has either caught up to player's hand size
-  // OR until both reach 6; always from the Garden.
   while(G.ai.hand.length < Math.min(G.player.hand.length,6)){
     aiPickOnce();
     refillGardenForDraft();
   }
-  // If player already at 6, let AI finish to 6
   while(G.player.hand.length>=6 && G.ai.hand.length<6){
     aiPickOnce();
     refillGardenForDraft();
   }
 }
 
+// --- SMARTER AI DRAFT: counters player's revealed types, prefers stats/rarity/coverage
 function aiPickOnce(){
   if(G.garden.length===0) return;
-  const ranked = G.garden.map((c,i)=>({c,i,score: aiScore(c)})).sort((a,b)=>b.score-a.score);
+  const playerTypes = G.player.hand.map(c=>c.type);
+  const counts = {};
+  for(const h of G.ai.hand){ counts[h.type]=(counts[h.type]||0)+1; }
+
+  const ranked = G.garden.map((c,i)=>{
+    let s = 0;
+    // base stats and rarity
+    s += (c.hp/6) + (c.atk/4) + c.energy;
+    if(c.rarity==="Rare") s+=3; else if(c.rarity==="Uncommon") s+=1;
+    // type coverage bonus (prefer new types)
+    s += (counts[c.type]||0)===0 ? 2 : 0;
+    // counter bonus: if this card's type has advantage over any revealed player type
+    const counters = playerTypes.some(pt => ADV[c.type]===pt);
+    if(counters) s += 3.5;
+    // synergy: healers/energizers get a small boost
+    if(c.active && (c.active.kind==="heal"||c.active.kind==="energize")) s+=1.2;
+    return {c,i,score:s};
+  }).sort((a,b)=>b.score-a.score);
+
   const pick = ranked[0];
   const card = G.garden.splice(pick.i,1)[0];
   G.ai.hand.push(card);
   log(`🤖 AI drafted ${card.name}.`);
-}
-
-function aiScore(c){
-  let s = 0;
-  if(c.type==="Thorn") s+=3;
-  if(c.rarity==="Rare") s+=3;
-  if(c.rarity==="Uncommon") s+=1;
-  s += (c.hp/10)+(c.atk/5)+c.energy;
-  // prefer new types
-  const counts = {};
-  for(const h of G.ai.hand){ counts[h.type]=(counts[h.type]||0)+1; }
-  s += (counts[c.type]||0)==0 ? 2 : 0;
-  return s;
 }
 
 function updateDraftButtons(){
@@ -363,7 +361,6 @@ function renderArrange(){
     };
   });
 
-  // show what will go to bench
   const benchHold = $("#player-bench-setup"); benchHold.innerHTML="";
   G.player.hand.forEach(c=> benchHold.appendChild(renderMini(c)));
 
@@ -381,8 +378,8 @@ function placeIntoRole(role, card, side){
   F[role] = u;
 }
 
+// --- AI arrangement (unchanged core, but solid baseline)
 function aiArrange(){
-  // simple: highest HP -> primary, highest ATK -> secondary, support = healer/energizer else highest EN
   const picks = G.ai.hand.slice();
   picks.sort((a,b)=>b.hp-a.hp); const P = initUnit(picks.shift());
   picks.sort((a,b)=>b.atk-a.atk); const S = initUnit(picks.shift());
@@ -393,7 +390,6 @@ function aiArrange(){
 }
 
 function beginCombat(){
-  // move player's remaining to bench
   const bench = G.player.hand.splice(0).map(initUnit);
   G.player.formation.bench = bench;
 
@@ -521,37 +517,18 @@ function doAttack(side, role){
   const EF = side==="player"? G.ai.formation : G.player.formation;
   const atk = F[role]; if(!unitCanAct(atk) || atk.curEN<1) return;
 
-  // target: attack opposing Primary by default
   const def = EF.primary && unitAlive(EF.primary) ? EF.primary :
               EF.secondary && unitAlive(EF.secondary) ? EF.secondary :
               EF.support;
 
   if(!def){ victory(side); return; }
 
-  let dmg = atk.atk + (atk.firstBonus||0);
-  if(ADV[atk.type]===def.type) dmg += 10; // type advantage on direct attack
-  if(atk.firstBonus) atk.firstBonus=0;
-
-  // swap penalty (half damage) if exactly one swap this turn from attacker side
-  const swaps = side==="player"? G.player.swaps : G.ai.swaps;
-  if(swaps===1 && (role==="primary" || role==="secondary")) dmg = Math.floor(dmg/2);
-
-  // defender modifiers
-  if(def.status.cover>0){ dmg = Math.max(0, dmg - def.status.cover); def.status.cover = 0; }
-  if(def.shield>0){ const ab=Math.min(def.shield,dmg); def.shield-=ab; dmg-=ab; }
-  if(def.passive&&def.passive.kind==="steadfast") dmg = Math.max(0, dmg - (def.passive.value||0));
-  if(atk.status.weakened>0){ dmg = Math.max(0, dmg - 5); atk.status.weakened=0; }
-
-  // burn makes next hit +10 received (unless Water w/ burnImmune)
-  if(def.status.burned>0 && !(def.passive&&def.passive.kind==="burnImmune")){ dmg+=10; def.status.burned=0; }
-
+  let dmg = calcDirectDamage(atk, def, side, role);
   def.curHP -= Math.max(0,dmg);
   atk.curEN -= 1;
-  log(`${label(side)} ${role} ${atk.name} hits ${label(side==="player"?"ai":"player")} Primary ${def.name} for ${dmg}.`);
+  log(`${label(side)} ${role} ${atk.name} hits ${label(side==="player"?"ai":"player")} ${def.name} for ${dmg}.`);
 
-  // reactive effects
-  if(def.passive&&def.passive.kind==="thorns"){ atk.curHP -= (def.passive.value||0); log(`${def.name}'s Thorns deal ${(def.passive.value||0)} back.`); }
-  if(atk.passive&&atk.passive.kind==="spores" && Math.random()<0.2){ def.status.weakened=1; log(`${def.name} is Weakened (-5 next).`); }
+  reactiveAfterHit(atk, def);
 
   postDamageCleanup();
   endIfExhaustedCheck(atk);
@@ -567,65 +544,51 @@ function useActive(side, role){
   const a = u.active;
   const spend = ()=>{ u.curEN -= a.cost; endIfExhaustedCheck(u); };
 
-  // simple target helpers
   const ally = (t)=> (t==="self"? u : F.primary||F.secondary||F.support);
   const enemyFront = ()=> EF.primary && unitAlive(EF.primary)? EF.primary : (EF.secondary&&unitAlive(EF.secondary)? EF.secondary : EF.support);
 
   switch(a.kind){
     case "heal":{
       const tgt = ally(a.target);
-      if(!tgt) break;
-      const v = a.value||0; tgt.curHP = Math.min(tgt.hp, tgt.curHP+v);
-      log(`${u.name} heals ${tgt.name} for ${v}.`); spend(); break;
+      if(tgt){ const v=a.value||0; tgt.curHP=Math.min(tgt.hp, tgt.curHP+v); log(`${u.name} heals ${tgt.name} for ${v}.`); spend(); }
+      break;
     }
     case "energize":{
       const tgt = a.target==="ally"? (F.primary||F.secondary||F.support) : u;
-      if(!tgt) break;
-      const v = a.value||1; tgt.curEN += v;
-      log(`${u.name} energizes ${tgt.name} +${v} EN.`); spend(); break;
+      if(tgt){ const v=a.value||1; tgt.curEN += v; log(`${u.name} energizes ${tgt.name} +${v} EN.`); spend(); }
+      break;
     }
     case "stun":{
-      const tgt = enemyFront(); if(!tgt) break;
-      tgt.status.stunned = Math.max(tgt.status.stunned, (a.value||1));
-      log(`${u.name} stuns ${tgt.name} for ${a.value||1} turn.`); spend(); break;
+      const tgt = enemyFront(); if(tgt){ tgt.status.stunned=Math.max(tgt.status.stunned,(a.value||1)); log(`${u.name} stuns ${tgt.name} for ${a.value||1}.`); spend(); }
+      break;
     }
     case "poison":{
-      const tgt = enemyFront(); if(!tgt) break;
-      tgt.status.poisoned += (a.value||1);
-      log(`${u.name} poisons ${tgt.name} (${tgt.status.poisoned}).`); spend(); break;
+      const tgt = enemyFront(); if(tgt){ tgt.status.poisoned += (a.value||1); log(`${u.name} poisons ${tgt.name} (${tgt.status.poisoned}).`); spend(); }
+      break;
     }
     case "burn":{
-      const tgt = enemyFront(); if(!tgt) break;
-      if(!(tgt.passive&&tgt.passive.kind==="burnImmune")) tgt.status.burned = 1;
-      log(`${u.name} applies Burn to ${tgt.name}.`); spend(); break;
+      const tgt = enemyFront(); if(tgt && !(tgt.passive&&tgt.passive.kind==="burnImmune")){ tgt.status.burned = 1; log(`${u.name} applies Burn to ${tgt.name}.`); spend(); }
+      break;
     }
     case "weaken":{
-      const tgt = enemyFront(); if(!tgt) break;
-      tgt.status.weakened = 1;
-      log(`${u.name} weakens ${tgt.name} (-5 next).`); spend(); break;
+      const tgt = enemyFront(); if(tgt){ tgt.status.weakened=1; log(`${u.name} weakens ${tgt.name} (-5 next).`); spend(); }
+      break;
     }
     case "cover":{
-      const tgt = ally("ally"); if(!tgt) break;
-      tgt.status.cover = Math.max(tgt.status.cover, a.value||5);
-      log(`${u.name} covers ${tgt.name} (-${tgt.status.cover} next hit).`); spend(); break;
+      const tgt = ally("ally"); if(tgt){ tgt.status.cover = Math.max(tgt.status.cover, a.value||5); log(`${u.name} covers ${tgt.name} (-${tgt.status.cover} next).`); spend(); }
+      break;
     }
     case "root":{
-      const tgt = enemyFront(); if(!tgt) break;
-      tgt.status.rooted = Math.max(tgt.status.rooted, a.value||1);
-      log(`${u.name} roots ${tgt.name}.`); spend(); break;
+      const tgt = enemyFront(); if(tgt){ tgt.status.rooted=Math.max(tgt.status.rooted,a.value||1); log(`${u.name} roots ${tgt.name}.`); spend(); }
+      break;
     }
     case "drain":{
-      const tgt = EF.primary; if(!tgt) break;
-      const v = Math.min(tgt.curEN, (a.value||1));
-      tgt.curEN -= v; u.curEN += v; // transfer to user
-      log(`${u.name} drains ${v} EN from ${tgt.name}.`); spend(); break;
+      const tgt = EF.primary; if(tgt){ const v=Math.min(tgt.curEN,(a.value||1)); tgt.curEN-=v; u.curEN+=v; log(`${u.name} drains ${v} EN from ${tgt.name}.`); spend(); }
+      break;
     }
     case "seed":{
-      // add a 10/10 seedling to bench with same type, 1 EN
-      const seed = {name:"Seedling", type:u.type, rarity:"Seed", energy:1, hp:10, atk:10,
-                    passive:null, active:null};
-      const su = initUnit(seed);
-      F.bench.push(su);
+      const seed = {name:"Seedling", type:u.type, rarity:"Seed", energy:1, hp:10, atk:10, passive:null, active:null};
+      const su = initUnit(seed); F.bench.push(su);
       log(`${u.name} seeds a 10/10 ${u.type} on your bench.`); spend(); break;
     }
   }
@@ -634,43 +597,30 @@ function useActive(side, role){
 }
 
 function startSwapFlow(){
-  // very simple: swap your Secondary and Support if allowed, or Primary<->Secondary if Support anchored etc.
-  // Real UI would let you pick; this keeps it one-button for mobile.
   const F = G.player.formation;
-  if(F.support && F.support.status.anchor){ log("Support is anchored; trying Primary/Secondary."); }
-  if(F.primary && F.primary.status.anchor && F.secondary && F.secondary.status.anchor){ log("Anchored — cannot swap."); return; }
-
-  // try swap primary<->secondary first if not anchored
   if(F.primary && F.secondary && !F.primary.status.anchor && !F.secondary.status.anchor){
     [F.primary, F.secondary] = [F.secondary, F.primary];
-    G.player.swaps++;
-    log("You swapped Primary and Secondary.");
+    G.player.swaps++; log("You swapped Primary and Secondary.");
   } else if (F.secondary && F.support && !F.support.status.anchor){
     [F.secondary, F.support] = [F.support, F.secondary];
-    G.player.swaps++;
-    log("You swapped Secondary and Support.");
+    G.player.swaps++; log("You swapped Secondary and Support.");
   } else {
     log("No valid swap available.");
     return;
   }
-
-  // Swapped-in bench units enter with full EN (handled when moved from bench in replacements)
   renderCombatBoards(); enableActionButtons();
 }
 
 function endTurn(){
-  // Exhaustion management: if any unit reached 0 EN this turn, they become exhausted and skip next turn;
-  // at end of their skip, they refill to full.
   applyEndOfTurnEffects("player");
   G.current = "ai"; updateTurnBanner();
   renderCombatBoards(); enableActionButtons();
-  setTimeout(aiTurn, 300); // quick handoff
+  setTimeout(aiTurn, 250);
 }
 
 function applyEndOfTurnEffects(side){
   const F = side==="player"? G.player.formation : G.ai.formation;
 
-  // Regen & Vitalize passives
   if(unitAlive(F.support) && F.support.passive && F.support.passive.kind==="vitalize"){
     const target = F.primary && unitAlive(F.primary)? F.primary : F.secondary;
     if(target){ target.curEN += (F.support.passive.value||1); log(`${label(side)} Support vitalizes ${target.name} +${F.support.passive.value||1} EN.`); }
@@ -680,7 +630,6 @@ function applyEndOfTurnEffects(side){
     log(`${label(side)} Primary regenerates ${(F.primary.passive.value||0)} HP.`);
   }
 
-  // Poison damage tick
   ["primary","secondary","support"].forEach(r=>{
     const u = F[r]; if(!unitAlive(u)) return;
     if(u.status.poisoned>0){
@@ -690,30 +639,20 @@ function applyEndOfTurnEffects(side){
     }
   });
 
-  // Exhaustion: if a unit had 0 EN at start of this turn (exhausted), it refills now and is no longer exhausted
   ["primary","secondary","support"].forEach(r=>{
     const u = F[r]; if(!u) return;
-    if(u.exhausted){
-      u.curEN = u.energy;
-      u.exhausted = false;
-      log(`${u.name} refreshes to full energy.`);
-    }
-    if(u.curEN<=0 && !u.exhausted){
-      u.exhausted = true; // will skip next turn; refills at next end
-    }
+    if(u.exhausted){ u.curEN = u.energy; u.exhausted=false; log(`${u.name} refreshes to full energy.`); }
+    if(u.curEN<=0 && !u.exhausted){ u.exhausted = true; }
   });
 
-  // Reset swap count
   if(side==="player") G.player.swaps=0; else G.ai.swaps=0;
 
-  // Replace dead frontliners
   handleReplacements(side);
   checkVictory();
 }
 
 function handleReplacements(side){
   const F = side==="player"? G.player.formation : G.ai.formation;
-  // replacement order: Secondary -> Primary; Support -> Secondary; Bench -> Support
   if(!unitAlive(F.primary)){
     if(unitAlive(F.secondary)){ F.primary = F.secondary; F.secondary = null; }
     else if(unitAlive(F.support)){ F.primary = F.support; F.support = null; }
@@ -721,22 +660,64 @@ function handleReplacements(side){
   if(!unitAlive(F.secondary) && unitAlive(F.support)){ F.secondary = F.support; F.support = null; }
   if(!unitAlive(F.support) && F.bench.length>0){
     const inU = F.bench.shift();
-    // entering from bench: full energy
     inU.curEN = inU.energy; inU.exhausted=false;
     F.support = inU;
   }
 }
 
-function endIfExhaustedCheck(u){
-  if(u.curEN<=0){ u.exhausted=true; }
+function endIfExhaustedCheck(u){ if(u.curEN<=0){ u.exhausted=true; } }
+
+function postDamageCleanup(){ /* hook for combos if needed */ }
+
+function reactiveAfterHit(attacker, defender){
+  if(attacker.firstBonus){ attacker.firstBonus=0; }
+  if(defender.passive&&defender.passive.kind==="thorns"){ attacker.curHP -= (defender.passive.value||0); log(`${defender.name}'s Thorns deal ${(defender.passive.value||0)} back.`); }
+  if(attacker.passive&&attacker.passive.kind==="spores" && Math.random()<0.2){ defender.status.weakened=1; log(`${defender.name} is Weakened (-5 next).`); }
 }
 
-function label(side){ return side==="player"?"You":"AI"; }
-
-function postDamageCleanup(){
-  // (placeholder for future combined effects)
+function calcDirectDamage(atk, def, side, role){
+  let dmg = atk.atk + (atk.firstBonus||0);
+  if(ADV[atk.type]===def.type) dmg += 10;
+  // swap penalty
+  const swaps = side==="player"? G.player.swaps : G.ai.swaps;
+  if(swaps===1 && (role==="primary"||role==="secondary")) dmg = Math.floor(dmg/2);
+  // defender cover
+  if(def.status.cover>0){ dmg = Math.max(0,dmg - def.status.cover); /* cover consumed on hit */ }
+  // shield
+  if(def.shield>0){ const ab=Math.min(def.shield,dmg); def.shield-=ab; dmg-=ab; }
+  // steadfast
+  if(def.passive&&def.passive.kind==="steadfast") dmg = Math.max(0, dmg - (def.passive.value||0));
+  // weakened attacker
+  if(atk.status.weakened>0){ dmg = Math.max(0, dmg - 5); /* consume */ }
+  // burn on defender adds +10 once (unless water immune)
+  if(def.status.burned>0 && !(def.passive&&def.passive.kind==="burnImmune")){ dmg += 10; }
+  // consume one-time flags
+  if(def.status.cover>0) def.status.cover=0;
+  if(def.status.burned>0 && !(def.passive&&def.passive.kind==="burnImmune")) def.status.burned=0;
+  if(atk.status.weakened>0) atk.status.weakened=0;
+  return Math.max(0, Math.floor(dmg));
 }
 
+// A pure "prediction" version that does NOT mutate state
+function predictDirectDamage(atk, def, swaps=0, role="primary"){
+  let dmg = atk.atk + (atk.firstBonus||0);
+  if(ADV[atk.type]===def.type) dmg += 10;
+  if(swaps===1 && (role==="primary"||role==="secondary")) dmg = Math.floor(dmg/2);
+  let cover = def.status.cover||0;
+  let shield = def.shield||0;
+  let weakened = atk.status.weakened>0;
+  let burn = def.status.burned>0 && !(def.passive&&def.passive.kind==="burnImmune");
+
+  if(cover>0){ dmg=Math.max(0,dmg-cover); cover=0; }
+  if(shield>0){ const ab=Math.min(shield,dmg); shield-=ab; dmg-=ab; }
+  if(def.passive&&def.passive.kind==="steadfast") dmg = Math.max(0, dmg - (def.passive.value||0));
+  if(weakened) dmg = Math.max(0,dmg-5);
+  if(burn) dmg += 10;
+
+  return Math.max(0, Math.floor(dmg));
+}
+
+/* -------- Victory -------- */
 function checkVictory(){
   const P = G.player.formation, A = G.ai.formation;
   const pAlive = [P.primary,P.secondary,P.support,...P.bench].some(unitAlive);
@@ -753,79 +734,189 @@ function disableAllActions(){
   ["#btn-ap","#btn-as","#btn-pp","#btn-ps","#btn-pu","#btn-swap","#btn-end"].forEach(id=> $(id).disabled = true);
 }
 
-/* -------- AI Turn -------- */
+/* -------- AI Turn (Aggressive + Defensive) -------- */
 function aiTurn(){
   if(G.phase!=="combat") return;
   const F = G.ai.formation, E = G.player.formation;
 
-  // Basic AI plan per role:
-  // 1) If support can heal an injured ally or energize a key ally, use it.
-  // 2) If primary has energy, attack; else active if useful.
-  // 3) If secondary has energy, attack; else active if useful.
-  // 4) Occasionally swap to bring higher HP/ATK forward (if not anchored).
+  // 0) Defensive/offensive swap logic:
+  // Save dying primary OR bring in better matchup if possible.
+  tryAISwap(F, E);
 
-  // Support active
-  if(unitCanAct(F.support) && F.support.active && F.support.curEN>=F.support.active.cost){
-    const a = F.support.active;
-    let did=false;
-    if(a.kind==="heal"){
-      const target = [F.primary,F.secondary,F.support].filter(x=>x).sort((a,b)=>(a.curHP/a.hp)-(b.curHP/b.hp))[0];
-      if(target && target.curHP<target.hp){
-        F.support.curEN -= a.cost; target.curHP = Math.min(target.hp, target.curHP + (a.value||6));
-        log(`🤖 ${F.support.name} heals ${target.name}.`); did=true;
-      }
-    } else if (a.kind==="energize"){
-      const target = F.primary && unitAlive(F.primary)? F.primary : F.secondary;
-      if(target){ F.support.curEN -= a.cost; target.curEN += (a.value||1); log(`🤖 ${F.support.name} energizes ${target.name}.`); did=true; }
-    } else if (["stun","poison","burn","weaken","cover","root","drain","seed"].includes(a.kind)){
-      // just use on default target/ally
-      useActive("ai","support"); did=true;
-    }
-    if(did) endIfExhaustedCheck(F.support);
-  }
+  // 1) Support active (heal/energize/control) if high value
+  tryAISupport(F, E);
 
-  // Maybe swap if primary is very low and secondary is healthier & not anchored
-  if(unitAlive(F.secondary) && unitAlive(F.primary) && !F.primary.status.anchor && !F.secondary.status.anchor){
-    if(F.primary.curHP < F.secondary.curHP/2 && G.ai.swaps<2){
-      [F.primary,F.secondary] = [F.secondary,F.primary];
-      G.ai.swaps++; log("🤖 AI swaps Primary and Secondary.");
-    }
-  }
+  // 2) Primary: try to kill, else best value
+  tryAIAttackOrActive(F, E, "primary");
 
-  // Primary action: attack preferred
-  if(unitCanAct(F.primary) && F.primary.curEN>=1){ doAttack("ai","primary"); }
-  else if(unitCanAct(F.primary) && F.primary.active && F.primary.curEN>=F.primary.active.cost){ useActive("ai","primary"); }
+  // 3) Secondary: try to kill, else best value
+  tryAIAttackOrActive(F, E, "secondary");
 
-  // Secondary action
-  if(unitCanAct(F.secondary) && F.secondary.curEN>=1){ doAttack("ai","secondary"); }
-  else if(unitCanAct(F.secondary) && F.secondary.active && F.secondary.curEN>=F.secondary.active.cost){ useActive("ai","secondary"); }
-
-  // End AI turn
+  // 4) End turn
   applyEndOfTurnEffects("ai");
   G.current="player"; updateTurnBanner();
   renderCombatBoards(); enableActionButtons(); checkVictory();
 }
 
-/* -------- Helpers -------- */
-function renderArrangeToBenches(){
-  $("#player-bench-setup").innerHTML="";
-  G.player.hand.forEach(c=> $("#player-bench-setup").appendChild(renderMini(c)));
+function tryAISwap(F, E){
+  if(!unitAlive(F.primary)) return; // will be replaced in end effects anyway
+  if(G.ai.swaps>=2) return;
+
+  const p = F.primary, s = F.secondary;
+  // If primary is in lethal range from player's primary next turn, and secondary is healthier and not anchored -> swap
+  if(s && unitAlive(s) && !p.status.anchor && !s.status.anchor){
+    // estimate player's next primary damage against us
+    const oppP = E.primary && unitAlive(E.primary) ? E.primary : null;
+    const likelyDmg = oppP ? predictDirectDamage(oppP, p, 0, "primary") : 0;
+    if(p.curHP <= Math.max(10, likelyDmg)){ // danger threshold
+      [F.primary, F.secondary] = [F.secondary, F.primary];
+      G.ai.swaps++; log("🤖 AI swaps Primary and Secondary (defensive).");
+      return;
+    }
+  }
+
+  // Offensive: if secondary has strong type advantage to enemy primary, swap forward
+  if(s && unitAlive(s) && !p.status.anchor && !s.status.anchor && unitAlive(E.primary)){
+    if(ADV[s.type]===E.primary.type && G.ai.swaps<2){
+      [F.primary, F.secondary] = [F.secondary, F.primary];
+      G.ai.swaps++; log("🤖 AI swaps to push type advantage.");
+    }
+  }
 }
 
-function renderArrangeSlots(){
-  $$(".slot[data-slot^='player-']").forEach(s=> s.innerHTML="(empty)");
+function tryAISupport(F, E){
+  const u = F.support;
+  if(!unitCanAct(u) || !u.active || u.curEN<u.active.cost) return;
+  const a = u.active;
+
+  // Healing priority: heal the lowest % HP ally if under 55% and heal >=8
+  if(a.kind==="heal"){
+    const targets = [F.primary,F.secondary,F.support].filter(unitAlive);
+    if(targets.length){
+      targets.sort((x,y)=>(x.curHP/x.hp)-(y.curHP/y.hp));
+      const t = targets[0];
+      const ratio = t.curHP/t.hp;
+      const healV = a.value||0;
+      if(ratio<0.55 && healV>=8){
+        u.curEN -= a.cost; t.curHP = Math.min(t.hp, t.curHP + healV);
+        log(`🤖 ${u.name} heals ${t.name} for ${healV}.`);
+        endIfExhaustedCheck(u);
+        return;
+      }
+    }
+  }
+
+  // Energize priority: if primary lacks energy to secure a kill this turn
+  if(a.kind==="energize"){
+    const target = F.primary && unitAlive(F.primary) ? F.primary : F.secondary;
+    const enem = E.primary && unitAlive(E.primary) ? E.primary : (E.secondary&&unitAlive(E.secondary)?E.secondary:E.support);
+    if(target && enem){
+      const dmgNow = target.curEN>=1 ? predictDirectDamage(target, enem, G.ai.swaps, "primary") : 0;
+      const lethal = enem.curHP <= dmgNow;
+      if(!lethal && target.curEN<1){
+        u.curEN -= a.cost; target.curEN += (a.value||1);
+        log(`🤖 ${u.name} energizes ${target.name} +${(a.value||1)} EN.`);
+        endIfExhaustedCheck(u);
+        return;
+      }
+    }
+  }
+
+  // Control: stun/root the player's highest ATK live unit (aggressive tempo)
+  if((a.kind==="stun"||a.kind==="root")){
+    const candidates = [E.primary,E.secondary,E.support].filter(unitAlive);
+    if(candidates.length){
+      candidates.sort((x,y)=>y.atk-x.atk);
+      const t = candidates[0];
+      (a.kind==="stun") ? (t.status.stunned=Math.max(t.status.stunned, a.value||1))
+                        : (t.status.rooted=Math.max(t.status.rooted, a.value||1));
+      u.curEN -= a.cost;
+      log(`🤖 ${u.name} uses ${a.kind} on ${t.name}.`);
+      endIfExhaustedCheck(u);
+      return;
+    }
+  }
+
+  // Attrition when no immediate kill: poison/burn/weak/drain
+  if(["poison","burn","weaken","drain","cover","seed"].includes(a.kind)){
+    // simple: use on default targets
+    useActive("ai","support");
+  }
 }
 
-function renderLogOnce(){ renderLog(); }
+function tryAIAttackOrActive(F, E, role){
+  const u = F[role];
+  if(!unitAlive(u)) return;
 
+  // choose the best enemy target among active row (pref primary)
+  const targets = [E.primary,E.secondary,E.support].filter(unitAlive);
+  if(targets.length===0) return;
+
+  // 1) If attack can kill someone, do it (prefer killing Primary, else lowest HP kill)
+  if(u.curEN>=1 && unitCanAct(u)){
+    // check kills
+    let kill = null;
+    for(const t of targets){
+      const dmg = predictDirectDamage(u, t, G.ai.swaps, role);
+      if(t.curHP <= dmg){ kill = (kill==null || (t===E.primary)) ? t : kill; }
+    }
+    if(kill){
+      // ensure attack hits that kill target: we only attack “front” in our simple rules (Primary by default),
+      // but we allow kill on whichever front exists in order (Primary > Secondary > Support)
+      // Choose the target that is currently “front-most” among kill-ables.
+      const order = [E.primary,E.secondary,E.support].filter(x=>x&&kill&&x===kill);
+      if(order.length){
+        doAttack("ai", role);
+        return;
+      }
+    }
+  }
+
+  // 2) If active can set up lethal (stun to deny counter, energize to enable strike, weaken to reduce damage, burn to amplify), try active first.
+  if(unitCanAct(u) && u.active && u.curEN>=u.active.cost){
+    const a = u.active;
+    // aggressiveness: if burn/poison can push next attack into lethal range or if drain slows enemy primary with high EN
+    if(a.kind==="burn"||a.kind==="poison"||a.kind==="weaken"||a.kind==="drain"||a.kind==="stun"||a.kind==="root"||a.kind==="energize"){
+      // heuristic: use now if we can't attack (no EN) or if target would survive our attack
+      let front = E.primary && unitAlive(E.primary)? E.primary : (E.secondary&&unitAlive(E.secondary)?E.secondary:E.support);
+      const canAttack = u.curEN>=1;
+      const dmg = canAttack ? predictDirectDamage(u, front, G.ai.swaps, role) : 0;
+      const wouldKill = canAttack && front.curHP <= dmg;
+      if(!wouldKill){
+        useActive("ai", role);
+        return;
+      }
+    }
+  }
+
+  // 3) Otherwise, attack the best value target (front-most available). Our attack function auto-targets front.
+  if(unitCanAct(u) && u.curEN>=1){
+    doAttack("ai", role);
+    return;
+  }
+
+  // 4) If no action, try active as last resort
+  if(unitCanAct(u) && u.active && u.curEN>=u.active.cost){
+    useActive("ai", role);
+  }
+}
+
+/* -------- Event/UI helpers -------- */
 function renderAllDraft(){ renderGarden(); renderHands(); }
-
 function renderAllCombat(){ renderCombatBoards(); enableActionButtons(); }
-
-function renderAll(){ renderGarden(); renderHands(); renderCombatBoards(); }
 
 /* -------- Start ---------- */
 newGame();
+
+/* -------- Bind Garden click after newGame -------- */
+document.addEventListener("click", (e)=>{
+  // delegate garden card picks
+  if(G.phase==="draft"){
+    const cards = Array.from(document.querySelectorAll("#garden .card"));
+    const idx = cards.indexOf(e.target.closest(".card"));
+    if(idx>=0){ pickFromGarden(idx); }
+  }
+});
 </script>
 </body>
 </html>
