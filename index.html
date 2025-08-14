@@ -5,44 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Overgrowth Game</title>
 <style>
-body {
-  margin: 0;
-  font-family: sans-serif;
-  background-color: #87CEEB;
-  overflow: hidden;
-}
-/* Loading */
-#loadingScreen {
-  position: fixed; top:0; left:0; width:100%; height:100%;
-  display:flex; justify-content:center; align-items:center; flex-direction:column;
-  background-color:#87CEEB; z-index:1000;
-}
-#flower {
-  width:50px; height:50px;
-  background-image:url('https://i.imgur.com/3xQZ7Vf.png');
-  background-size:contain; background-repeat:no-repeat;
-  transform: scale(0);
-  transition: transform 6s ease-out;
-  margin-bottom:20px;
-}
-/* Game */
-#gameScreen { display:none; padding:20px; text-align:center;}
-.card {
-  display:inline-block; width:90px; height:130px; margin:10px;
-  background:#fff; border:2px solid #333; border-radius:8px;
-  position:relative; cursor:pointer; transition: transform 0.3s, border 0.2s;
-}
-.card:hover { transform:scale(1.1);}
-.card.selected { border:3px solid gold;}
-.healthBar {position:absolute; bottom:5px; left:5px; width:80px; height:12px; background:red; border-radius:6px; overflow:hidden;}
-.healthFill {height:100%; background:green; width:100%; transition: width 0.5s ease;}
-#message {margin-top:20px; font-weight:bold; min-height:24px;}
-#options {margin-top:20px;}
-.optionBtn {padding:8px 12px; margin:5px; font-size:14px; cursor:pointer;}
-.card.enemy.selected { border:3px solid crimson;}
-/* Win */
-#winScreen { display:none; text-align:center; padding:20px;}
-button {padding:10px 20px; font-size:16px; margin-top:20px;}
+body {margin:0;font-family:sans-serif;background:#87CEEB;overflow:hidden;}
+#loadingScreen{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;flex-direction:column;background:#87CEEB;z-index:1000;}
+#flower{width:60px;height:60px;background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/Red_Rose.jpg/240px-Red_Rose.jpg');background-size:contain;background-repeat:no-repeat;transform:scale(0);transition:transform 6s ease-out;margin-bottom:20px;}
+#gameScreen{display:none;padding:20px;text-align:center;}
+.card{display:inline-block;width:120px;height:auto;margin:10px;padding:5px;background:#fff;border:2px solid #333;border-radius:8px;position:relative;cursor:pointer;transition:transform 0.3s,border 0.2s;}
+.card:hover{transform:scale(1.1);}
+.card.selected{border:3px solid gold;}
+.card.enemy.selected{border:3px solid crimson;}
+.healthBar{width:100%;height:12px;background:red;border-radius:6px;overflow:hidden;margin-top:4px;}
+.healthFill{height:100%;background:green;width:100%;transition:width 0.5s ease;}
+.cardData{font-size:12px;margin-top:4px;text-align:left;}
+#message{margin-top:20px;font-weight:bold;min-height:24px;}
+#options{margin-top:20px;}
+.optionBtn{padding:6px 10px;margin:3px;font-size:14px;cursor:pointer;}
+#winScreen{display:none;text-align:center;padding:20px;}
+button{padding:10px 20px;font-size:16px;margin-top:20px;}
 </style>
 </head>
 <body>
@@ -53,165 +31,133 @@ button {padding:10px 20px; font-size:16px; margin-top:20px;}
 </div>
 
 <div id="gameScreen">
-  <h1>Overgrowth</h1>
-  <h3>Your Cards</h3>
-  <div id="playerCards"></div>
-  <h3>Enemy Cards</h3>
-  <div id="enemyCards"></div>
-  <p id="message"></p>
-  <div id="options"></div>
+<h1>Overgrowth</h1>
+<h3>Your Cards</h3>
+<div id="playerCards"></div>
+<h3>Enemy Cards</h3>
+<div id="enemyCards"></div>
+<p id="message"></p>
+<div id="options"></div>
 </div>
 
 <div id="winScreen">
-  <h1 id="winMessage"></h1>
-  <button onclick="restartGame()">Restart</button>
+<h1 id="winMessage"></h1>
+<button onclick="restartGame()">Restart</button>
 </div>
 
 <script>
-const loadingScreen = document.getElementById('loadingScreen');
-const flower = document.getElementById('flower');
-const gameScreen = document.getElementById('gameScreen');
-const playerCardsDiv = document.getElementById('playerCards');
-const enemyCardsDiv = document.getElementById('enemyCards');
-const message = document.getElementById('message');
-const optionsDiv = document.getElementById('options');
-const winScreen = document.getElementById('winScreen');
-const winMessage = document.getElementById('winMessage');
+const loadingScreen=document.getElementById('loadingScreen');
+const flower=document.getElementById('flower');
+const gameScreen=document.getElementById('gameScreen');
+const playerCardsDiv=document.getElementById('playerCards');
+const enemyCardsDiv=document.getElementById('enemyCards');
+const message=document.getElementById('message');
+const optionsDiv=document.getElementById('options');
+const winScreen=document.getElementById('winScreen');
+const winMessage=document.getElementById('winMessage');
 
-let playerCards = [];
-let enemyCards = [];
-let selectedPlayerCard = null;
-let selectedAction = null;
-let selectedEnemyCard = null;
+let playerCards=[],enemyCards=[];
+let selectedPlayerCard=null,selectedAction=null;
 
-function createCard(name,hp,actions){ return {name,maxHp:hp,hp,actions};}
-function draftCards(deck,count){const draft=[];const copy=[...deck];for(let i=0;i<count;i++){const index=Math.floor(Math.random()*copy.length);draft.push(copy.splice(index,1)[0]);} return draft;}
+function createCard(name,hp,actions){return{name,maxHp:hp,hp,actions};}
+function draftCards(deck,count){const draft=[];const copy=[...deck];for(let i=0;i<count;i++){const index=Math.floor(Math.random()*copy.length);draft.push(copy.splice(index,1)[0]);}return draft;}
 
 function initCards(){
-  const playerDeck=[
-    createCard('Sunflower',40,[{name:'Sunbeam',type:'attack',value:15},{name:'Grow',type:'buff',value:10}]),
-    createCard('Rose',50,[{name:'Thorn Strike',type:'attack',value:20},{name:'Shield',type:'buff',value:15}]),
-    createCard('Tulip',35,[{name:'Petal Slash',type:'attack',value:12},{name:'Heal',type:'buff',value:10}]),
-    createCard('Daisy',30,[{name:'Quick Hit',type:'attack',value:10},{name:'Regenerate',type:'buff',value:12}])
-  ];
-  const enemyDeck=[
-    createCard('Thorn',30,[{name:'Spike',type:'attack',value:12},{name:'Harden',type:'buff',value:8}]),
-    createCard('Venus Flytrap',45,[{name:'Bite',type:'attack',value:18},{name:'Absorb',type:'buff',value:10}]),
-    createCard('Cactus',40,[{name:'Prickle',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
-    createCard('Poison Ivy',35,[{name:'Poison',type:'attack',value:14},{name:'Toughen',type:'buff',value:8}])
-  ];
-  playerCards=draftCards(playerDeck,3);
-  enemyCards=draftCards(enemyDeck,3);
+const playerDeck=[
+createCard('Sunflower',40,[{name:'Sunbeam',type:'attack',value:15},{name:'Grow',type:'buff',value:10}]),
+createCard('Rose',50,[{name:'Thorn Strike',type:'attack',value:20},{name:'Shield',type:'buff',value:15}]),
+createCard('Tulip',35,[{name:'Petal Slash',type:'attack',value:12},{name:'Heal',type:'buff',value:10}]),
+createCard('Daisy',30,[{name:'Quick Hit',type:'attack',value:10},{name:'Regenerate',type:'buff',value:12}])
+];
+const enemyDeck=[
+createCard('Thorn',30,[{name:'Spike',type:'attack',value:12},{name:'Harden',type:'buff',value:8}]),
+createCard('Venus Flytrap',45,[{name:'Bite',type:'attack',value:18},{name:'Absorb',type:'buff',value:10}]),
+createCard('Cactus',40,[{name:'Prickle',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
+createCard('Poison Ivy',35,[{name:'Poison',type:'attack',value:14},{name:'Toughen',type:'buff',value:8}])
+];
+playerCards=draftCards(playerDeck,3);
+enemyCards=draftCards(enemyDeck,3);
 }
 
 function renderCards(){
-  playerCardsDiv.innerHTML='';
-  enemyCardsDiv.innerHTML='';
-  playerCards.forEach((card,i)=>{
-    const div=document.createElement('div');
-    div.className='card';
-    if(i===selectedPlayerCard) div.classList.add('selected');
-    div.innerHTML=`<strong>${card.name}</strong>`;
-    const healthBar=document.createElement('div'); healthBar.className='healthBar';
-    const healthFill=document.createElement('div'); healthFill.className='healthFill';
-    healthFill.style.width=(card.hp/card.maxHp*100)+'%';
-    healthBar.appendChild(healthFill); div.appendChild(healthBar);
-    div.onclick=()=>selectPlayerCard(i);
-    playerCardsDiv.appendChild(div);
-  });
+playerCardsDiv.innerHTML='';
+enemyCardsDiv.innerHTML='';
 
-  enemyCards.forEach((card,i)=>{
-    const div=document.createElement('div');
-    div.className='card enemy';
-    if(i===selectedEnemyCard) div.classList.add('selected');
-    div.innerHTML=`<strong>${card.name}</strong>`;
-    const healthBar=document.createElement('div'); healthBar.className='healthBar';
-    const healthFill=document.createElement('div'); healthFill.className='healthFill';
-    healthFill.style.width=(card.hp/card.maxHp*100)+'%';
-    healthBar.appendChild(healthFill); div.appendChild(healthBar);
-    div.onclick=()=>selectEnemyCard(i);
-    enemyCardsDiv.appendChild(div);
-  });
+playerCards.forEach((card,i)=>{
+  const div=document.createElement('div');
+  div.className='card';
+  if(i===selectedPlayerCard) div.classList.add('selected');
+  div.innerHTML=`<strong>${card.name}</strong>
+  <div class="cardData">HP: ${card.hp}/${card.maxHp}<br>Actions:<br>${card.actions.map(a=>a.name).join(', ')}</div>
+  <div class="healthBar"><div class="healthFill" style="width:${(card.hp/card.maxHp*100)}%"></div></div>`;
+  div.onclick=()=>selectPlayerCard(i);
+  playerCardsDiv.appendChild(div);
+});
+
+enemyCards.forEach((card,i)=>{
+  const div=document.createElement('div');
+  div.className='card enemy';
+  div.innerHTML=`<strong>${card.name}</strong>
+  <div class="cardData">HP: ${card.hp}/${card.maxHp}<br>Actions:<br>${card.actions.map(a=>a.name).join(', ')}</div>
+  <div class="healthBar"><div class="healthFill" style="width:${(card.hp/card.maxHp*100)}%"></div></div>`;
+  div.onclick=()=>{ if(selectedAction && selectedAction.type==='attack') performAction(selectedPlayerCard,selectedAction,i); };
+  enemyCardsDiv.appendChild(div);
+});
 }
 
 function selectPlayerCard(index){
-  selectedPlayerCard=index; selectedAction=null; selectedEnemyCard=null;
-  renderCards(); showOptions();
-}
-
-function showOptions(){
-  optionsDiv.innerHTML='';
-  if(selectedPlayerCard===null) return;
-  const card=playerCards[selectedPlayerCard];
-  card.actions.forEach(act=>{
-    const btn=document.createElement('button'); btn.className='optionBtn'; btn.textContent=act.name;
-    btn.onclick=()=>selectAction(act); optionsDiv.appendChild(btn);
-  });
-}
-
-function selectAction(action){
-  selectedAction=action;
-  if(action.type==='buff'){ performAction(selectedPlayerCard,selectedAction); }
-  else{ message.textContent='Select enemy card to attack.'; renderCards(); }
-}
-
-function selectEnemyCard(index){
-  if(!selectedAction || selectedAction.type!=='attack') return;
-  selectedEnemyCard=index;
-  performAction(selectedPlayerCard,selectedAction,selectedEnemyCard);
+selectedPlayerCard=index; selectedAction=null; optionsDiv.innerHTML='';
+const card=playerCards[index];
+card.actions.forEach(act=>{
+  const btn=document.createElement('button'); btn.className='optionBtn'; btn.textContent=act.name;
+  btn.onclick=()=>{selectedAction=act; if(act.type==='buff'){performAction(selectedPlayerCard,act); message.textContent=`${card.name} used ${act.name} and healed!`; optionsDiv.innerHTML='';} else{message.textContent='Select an enemy card to attack.';}};
+  optionsDiv.appendChild(btn);
+});
+renderCards();
 }
 
 function performAction(playerIndex,action,enemyIndex){
-  const player=playerCards[playerIndex];
-  if(action.type==='attack'){
-    const target=enemyCards[enemyIndex];
-    target.hp-=action.value;
-    if(target.hp<=0) enemyCards.splice(enemyIndex,1);
-    message.textContent=`${player.name} used ${action.name} on ${target.name} for ${action.value}!`;
-  } else if(action.type==='buff'){
-    player.hp+=action.value; if(player.hp>player.maxHp) player.hp=player.maxHp;
-    message.textContent=`${player.name} used ${action.name} and healed ${action.value}!`;
-  }
-  selectedPlayerCard=null; selectedAction=null; selectedEnemyCard=null;
-  optionsDiv.innerHTML='';
-  renderCards();
-  if(enemyCards.length===0) return endGame('You Win!');
-  setTimeout(enemyTurn,700);
+const player=playerCards[playerIndex];
+if(action.type==='attack'){
+const target=enemyCards[enemyIndex];
+target.hp-=action.value;
+message.textContent=`${player.name} used ${action.name} on ${target.name} for ${action.value}!`;
+if(target.hp<=0) enemyCards.splice(enemyIndex,1);
+} else if(action.type==='buff'){
+player.hp+=action.value; if(player.hp>player.maxHp) player.hp=player.maxHp;
+message.textContent=`${player.name} used ${action.name} and healed ${action.value}!`;
+}
+selectedPlayerCard=null; selectedAction=null; optionsDiv.innerHTML='';
+renderCards();
+if(enemyCards.length===0) return endGame('You Win!');
+setTimeout(enemyTurn,700);
 }
 
 function enemyTurn(){
-  if(playerCards.length===0) return;
-  const card=enemyCards[0];
-  const action=card.actions[Math.floor(Math.random()*2)];
-  if(action.type==='attack'){
-    const target=playerCards[0]; target.hp-=action.value;
-    if(target.hp<=0) playerCards.shift();
-    message.textContent=`Enemy ${card.name} used ${action.name} on ${target.name} for ${action.value}!`;
-  } else{
-    card.hp+=action.value; if(card.hp>card.maxHp) card.hp=card.maxHp;
-    message.textContent=`Enemy ${card.name} used ${action.name} and healed ${action.value}!`;
-  }
-  renderCards();
-  if(playerCards.length===0) return endGame('You Lose!');
+if(playerCards.length===0) return;
+const card=enemyCards[Math.floor(Math.random()*enemyCards.length)];
+const action=card.actions[Math.floor(Math.random()*card.actions.length)];
+if(action.type==='attack'){
+const target=playerCards[Math.floor(Math.random()*playerCards.length)];
+target.hp-=action.value;
+message.textContent=`Enemy ${card.name} used ${action.name} on ${target.name} for ${action.value}!`;
+if(target.hp<=0) playerCards=playerCards.filter(c=>c!==target);
+} else{
+card.hp+=action.value;if(card.hp>card.maxHp) card.hp=card.maxHp;
+message.textContent=`Enemy ${card.name} used ${action.name} and healed ${action.value}!`;
+}
+renderCards();
+if(playerCards.length===0) return endGame('You Lose!');
 }
 
-function endGame(result){
-  gameScreen.style.display='none';
-  winScreen.style.display='block';
-  winMessage.textContent=result;
-}
+function endGame(result){gameScreen.style.display='none'; winScreen.style.display='block'; winMessage.textContent=result;}
+function restartGame(){initCards();winScreen.style.display='none';gameScreen.style.display='block';message.textContent='';renderCards();}
 
-function restartGame(){
-  initCards();
-  winScreen.style.display='none';
-  gameScreen.style.display='block';
-  message.textContent='';
-  renderCards();
-}
-
-setTimeout(()=>{ loadingScreen.style.display='none'; gameScreen.style.display='block'; renderCards(); },6000);
+setTimeout(()=>{loadingScreen.style.display='none'; gameScreen.style.display='block'; renderCards();},6000);
 setTimeout(()=>{flower.style.transform='scale(2) rotate(15deg)';},50);
+
 initCards();
 </script>
+
 </body>
 </html>
