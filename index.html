@@ -13,21 +13,10 @@ body {margin:0;font-family:sans-serif;background:#87CEEB;overflow:hidden;}
   display:flex; justify-content:center; align-items:center; flex-direction:column;
   background:#87CEEB; z-index:1000;
 }
-#sunContainer{position:relative;width:80px;height:80px;margin-bottom:20px;}
 #sun{
-  width:50px; height:50px; border-radius:50%; background:yellow;
-  position:absolute; top:15px; left:15px;
-  box-shadow:0 0 25px yellow;
-  animation:glow 2s ease-in-out infinite;
-}
-.ray{
-  position:absolute; width:4px; height:20px; background:gold;
-  top:0; left:50%; transform-origin:bottom center; border-radius:2px;
-  animation:spin 2s linear infinite;
-}
-.petal{
-  position:absolute; width:15px; height:30px; border-radius:50%; background:pink;
-  bottom:0; opacity:0; transform:scale(0); transition:transform 0.5s ease, opacity 0.5s ease;
+  width:60px; height:60px; border-radius:50%; background:yellow;
+  box-shadow:0 0 30px yellow; animation:glow 2s ease-in-out infinite;
+  margin-bottom:20px;
 }
 #loadingBarContainer{
   width:80%; height:20px; background:#fff; border-radius:10px; overflow:hidden; position:relative;
@@ -53,34 +42,16 @@ body {margin:0;font-family:sans-serif;background:#87CEEB;overflow:hidden;}
 button{padding:10px 20px; font-size:16px; margin-top:20px;}
 
 /* Animations */
-@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
 @keyframes glow{0%{box-shadow:0 0 10px yellow;}50%{box-shadow:0 0 35px yellow;}100%{box-shadow:0 0 10px yellow;}}
-@keyframes sway{0%{transform:translateY(0);}50%{transform:translateY(-3px);}100%{transform:translateY(0);}}
 </style>
 </head>
 <body>
 
 <!-- Loading Screen -->
 <div id="loadingScreen">
-  <div id="sunContainer">
-    <div id="sun"></div>
-    <div class="ray" style="transform: rotate(0deg) translateY(-10px);"></div>
-    <div class="ray" style="transform: rotate(45deg) translateY(-10px);"></div>
-    <div class="ray" style="transform: rotate(90deg) translateY(-10px);"></div>
-    <div class="ray" style="transform: rotate(135deg) translateY(-10px);"></div>
-    <div class="ray" style="transform: rotate(180deg) translateY(-10px);"></div>
-    <div class="ray" style="transform: rotate(225deg) translateY(-10px);"></div>
-    <div class="ray" style="transform: rotate(270deg) translateY(-10px);"></div>
-    <div class="ray" style="transform: rotate(315deg) translateY(-10px);"></div>
-  </div>
-
+  <div id="sun"></div>
   <div id="loadingBarContainer">
     <div id="loadingBar"></div>
-    <div class="petal" style="left:10%;"></div>
-    <div class="petal" style="left:30%;"></div>
-    <div class="petal" style="left:50%;"></div>
-    <div class="petal" style="left:70%;"></div>
-    <div class="petal" style="left:90%;"></div>
   </div>
   <p id="loadingText">Loading 0%</p>
 </div>
@@ -108,22 +79,12 @@ const loadingBar=document.getElementById('loadingBar');
 const loadingText=document.getElementById('loadingText');
 const loadingScreen=document.getElementById('loadingScreen');
 const gameScreen=document.getElementById('gameScreen');
-const petals=document.querySelectorAll('.petal');
 
 let loadPercent=0;
 const loadInterval=setInterval(()=>{
   loadPercent++;
   loadingBar.style.width=loadPercent+'%';
   loadingText.textContent='Loading '+loadPercent+'%';
-
-  petals.forEach((petal,i)=>{
-    if(loadPercent>i*20 && (!petal.style.opacity || petal.style.opacity==='0')){
-      petal.style.opacity=1;
-      petal.style.transform='scale(1) translateY(-5px)';
-      petal.style.animation='sway 2s ease-in-out infinite';
-    }
-  });
-
   if(loadPercent>=100){
     clearInterval(loadInterval);
     setTimeout(()=>{
@@ -134,30 +95,56 @@ const loadInterval=setInterval(()=>{
   }
 },30);
 
-// Game Logic
+// Game Data
 let playerCards=[],enemyCards=[];
 let selectedPlayerCard=null,selectedAction=null;
+
 function createCard(name,hp,actions){return{name,maxHp:hp,hp,actions};}
-function draftCards(deck,count){const draft=[];const copy=[...deck];for(let i=0;i<count;i++){const index=Math.floor(Math.random()*copy.length);draft.push(copy.splice(index,1)[0]);}return draft;}
+function draftCards(deck,count){
+  const draft=[]; const copy=[...deck];
+  for(let i=0;i<count;i++){
+    const index=Math.floor(Math.random()*copy.length);
+    draft.push(copy.splice(index,1)[0]);
+  }
+  return draft;
+}
 
 function startGame(){initCards(); renderCards();}
+
+// Expanded Card Pool
 function initCards(){
 const playerDeck=[
 createCard('Sunflower',40,[{name:'Sunbeam',type:'attack',value:15},{name:'Grow',type:'buff',value:10}]),
 createCard('Rose',50,[{name:'Thorn Strike',type:'attack',value:20},{name:'Shield',type:'buff',value:15}]),
 createCard('Tulip',35,[{name:'Petal Slash',type:'attack',value:12},{name:'Heal',type:'buff',value:10}]),
-createCard('Daisy',30,[{name:'Quick Hit',type:'attack',value:10},{name:'Regenerate',type:'buff',value:12}])
+createCard('Daisy',30,[{name:'Quick Hit',type:'attack',value:10},{name:'Regenerate',type:'buff',value:12}]),
+createCard('Orchid',45,[{name:'Poison Bloom',type:'attack',value:18},{name:'Camouflage',type:'buff',value:12}]),
+createCard('Lily',38,[{name:'Water Splash',type:'attack',value:14},{name:'Revitalize',type:'buff',value:15}]),
+createCard('Marigold',32,[{name:'Solar Beam',type:'attack',value:16},{name:'Harden',type:'buff',value:10}]),
+createCard('Poppy',28,[{name:'Sleep Dust',type:'attack',value:12},{name:'Shield',type:'buff',value:8}]),
+createCard('Iris',36,[{name:'Petal Storm',type:'attack',value:18},{name:'Focus',type:'buff',value:12}]),
+createCard('Carnation',33,[{name:'Thorn Whip',type:'attack',value:15},{name:'Regrow',type:'buff',value:10}])
 ];
+
 const enemyDeck=[
 createCard('Thorn',30,[{name:'Spike',type:'attack',value:12},{name:'Harden',type:'buff',value:8}]),
 createCard('Venus Flytrap',45,[{name:'Bite',type:'attack',value:18},{name:'Absorb',type:'buff',value:10}]),
 createCard('Cactus',40,[{name:'Prickle',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
-createCard('Poison Ivy',35,[{name:'Poison',type:'attack',value:14},{name:'Toughen',type:'buff',value:8}])
+createCard('Poison Ivy',35,[{name:'Poison',type:'attack',value:14},{name:'Toughen',type:'buff',value:8}]),
+createCard('Bramble',38,[{name:'Entangle',type:'attack',value:16},{name:'Resist',type:'buff',value:10}]),
+createCard('Snapdragon',34,[{name:'Fire Breath',type:'attack',value:18},{name:'Shield',type:'buff',value:12}]),
+createCard('Weeping Willow',50,[{name:'Root Grab',type:'attack',value:20},{name:'Regrow',type:'buff',value:15}]),
+createCard('Nightshade',40,[{name:'Shadow Strike',type:'attack',value:17},{name:'Camouflage',type:'buff',value:10}]),
+createCard('Bamboo',36,[{name:'Rapid Slash',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
+createCard('Creeper Vine',32,[{name:'Wrap',type:'attack',value:14},{name:'Harden',type:'buff',value:8}])
 ];
+
+// Random draft
 playerCards=draftCards(playerDeck,3);
 enemyCards=draftCards(enemyDeck,3);
 }
 
+// Rendering
 const playerPanel=document.getElementById('playerPanel');
 const enemyPanel=document.getElementById('enemyPanel');
 const message=document.getElementById('message');
@@ -168,7 +155,6 @@ playerPanel.innerHTML=''; enemyPanel.innerHTML='';
 playerCards.forEach((card,i)=>{
   const div=document.createElement('div');
   div.className='card'; if(i===selectedPlayerCard) div.classList.add('selected');
-  if(card.flash) div.classList.add(card.flash);
   div.innerHTML=`<strong>${card.name}</strong>
   <div class="cardData">HP: ${card.hp}/${card.maxHp}<br>Actions:<br>${card.actions.map(a=>a.name).join(', ')}</div>
   <div class="healthBar"><div class="healthFill" style="width:${(card.hp/card.maxHp*100)}%"></div></div>`;
@@ -178,7 +164,6 @@ playerCards.forEach((card,i)=>{
 enemyCards.forEach((card,i)=>{
   const div=document.createElement('div');
   div.className='card enemy';
-  if(card.flash) div.classList.add(card.flash);
   div.innerHTML=`<strong>${card.name}</strong>
   <div class="cardData">HP: ${card.hp}/${card.maxHp}<br>Actions:<br>${card.actions.map(a=>a.name).join(', ')}</div>
   <div class="healthBar"><div class="healthFill" style="width:${(card.hp/card.maxHp*100)}%"></div></div>`;
@@ -189,10 +174,9 @@ enemyCards.forEach((card,i)=>{
   };
   enemyPanel.appendChild(div);
 });
-playerCards.forEach(card=>{if(card.flash) setTimeout(()=>{delete card.flash; renderCards();},300);});
-enemyCards.forEach(card=>{if(card.flash) setTimeout(()=>{delete card.flash; renderCards();},300);});
 }
 
+// Player interaction
 function selectPlayerCard(index){
 selectedPlayerCard=index; selectedAction=null; optionsDiv.innerHTML='';
 const card=playerCards[index];
@@ -201,7 +185,6 @@ card.actions.forEach(act=>{
   btn.onclick=()=>{selectedAction=act; 
   if(act.type==='buff'){
     card.hp+=act.value; if(card.hp>card.maxHp) card.hp=card.maxHp;
-    card.flash='heal';
     message.textContent=`${card.name} used ${act.name} and healed ${act.value}!`;
     optionsDiv.innerHTML=''; renderCards();
     setTimeout(enemyTurn,700);
@@ -214,7 +197,7 @@ renderCards();
 function performAction(playerIndex,action,enemyIndex){
 const player=playerCards[playerIndex];
 const target=enemyCards[enemyIndex];
-target.hp-=action.value; target.flash='damage';
+target.hp-=action.value;
 message.textContent=`${player.name} used ${action.name} on ${target.name} for ${action.value}!`;
 if(target.hp<=0) enemyCards.splice(enemyIndex,1);
 selectedPlayerCard=null; selectedAction=null; optionsDiv.innerHTML='';
@@ -229,17 +212,18 @@ const card=enemyCards[Math.floor(Math.random()*enemyCards.length)];
 const action=card.actions[Math.floor(Math.random()*card.actions.length)];
 if(action.type==='attack'){
 const target=playerCards[Math.floor(Math.random()*playerCards.length)];
-target.hp-=action.value; target.flash='damage';
+target.hp-=action.value;
 message.textContent=`Enemy ${card.name} used ${action.name} on ${target.name} for ${action.value}!`;
 if(target.hp<=0) playerCards=playerCards.filter(c=>c!==target);
 } else{
-card.hp+=action.value; if(card.hp>card.maxHp) card.hp=card.maxHp; card.flash='heal';
+card.hp+=action.value; if(card.hp>card.maxHp) card.hp=card.maxHp;
 message.textContent=`Enemy ${card.name} used ${action.name} and healed ${action.value}!`;
 }
 renderCards();
 if(playerCards.length===0) return endGame('You Lose!');
 }
 
+// End & Restart
 const winScreen=document.getElementById('winScreen');
 const winMessage=document.getElementById('winMessage');
 function endGame(result){gameScreen.style.display='none'; winScreen.style.display='block'; winMessage.textContent=result;}
