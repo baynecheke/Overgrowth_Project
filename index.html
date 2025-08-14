@@ -1,105 +1,100 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Overgrowth</title>
+<title>Overgrowth — Garden Battle</title>
 <style>
   :root{--card-w:120px;--card-h:180px}
-  body{
-    margin:0; font-family:system-ui,-apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    background:#e8f5e9; display:flex; justify-content:center; align-items:flex-start;
-    min-height:100vh; padding:20px;
-  }
-
-  /* Loading screen uses your grass image as background */
+  body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; background:#eaf7ec; display:flex; justify-content:center; align-items:flex-start; padding:18px; min-height:100vh; }
+  /* Loading screen (uses your grass background) */
   #loadingScreen{
     position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    background: url('sandbox:/mnt/data/IMG_7672.jpeg') center/cover no-repeat;
-    z-index:9999; color:#fff; text-shadow:0 2px 6px rgba(0,0,0,0.6);
+    background: url('sandbox:/mnt/data/IMG_7672.jpeg') center/cover no-repeat; z-index:9999;
+    color:#fff; text-shadow:0 2px 6px rgba(0,0,0,0.6);
   }
-  #loadingText{ font-size:1.6rem; margin-bottom:12px; }
-  #flowerCanvas{ width:200px; height:200px; background:transparent; border-radius:12px; }
-  #progressBar{ width:60%; max-width:420px; height:14px; background:rgba(255,255,255,0.25); border-radius:10px; overflow:hidden; margin-top:12px; box-shadow:inset 0 1px 0 rgba(255,255,255,0.2);}
-  #progressFill{ width:0%; height:100%; background:linear-gradient(90deg,#ffd54f,#66bb6a); transition:width 120ms linear; }
+  #loadingText{ font-size:1.4rem; margin-bottom:10px; font-weight:700; }
+  #flowerCanvas{ width:220px; height:220px; background:transparent; border-radius:12px; }
+  #progressBar{ width:64%; max-width:420px; height:12px; background:rgba(255,255,255,0.25); border-radius:10px; overflow:hidden; margin-top:12px; box-shadow:inset 0 1px 0 rgba(255,255,255,0.25); }
+  #progressFill{ width:0%; height:100%; background:linear-gradient(90deg,#ffd54f,#ffb74d); transition:width 120ms linear; }
 
-  /* Game container */
+  /* Game */
   #gameContainer{ display:none; width:100%; max-width:1200px; margin:0 auto; align-items:center; }
+  h1{ color:#2b7a28; margin:6px 0 12px; text-align:center; font-size:28px; }
 
-  h1{ margin:6px 0 12px; font-size:28px; color:#2e7d32; text-align:center; }
+  .topRow{ display:flex; gap:12px; width:100%; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
+  #garden{ flex:1 1 100%; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; padding:8px; }
+  #finishDraft{ padding:8px 14px; background:#2e7d32; color:white; border-radius:8px; border:none; cursor:pointer; font-weight:700; }
 
-  .board{ display:flex; justify-content:space-between; gap:12px; width:100%; margin-top:14px; }
-  .playerBoard{ display:flex; flex-direction:column; align-items:center; width:48%; }
-  .cardsRow{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; padding:6px; }
+  .board{ display:flex; justify-content:space-between; gap:12px; width:100%; margin-top:16px; flex-wrap:wrap; }
+  .playerBoard{ width:48%; min-width:260px; display:flex; flex-direction:column; align-items:center; }
+  .cardsRow{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; padding:6px; }
 
-  /* Card flip */
-  .card{ width:var(--card-w); height:var(--card-h); perspective:1000px; }
-  .cardInner{ width:100%; height:100%; position:relative; transition: transform 0.6s; transform-style:preserve-3d; }
+  /* card flip */
+  .card{ width:var(--card-w); height:var(--card-h); perspective:1000px; cursor:pointer; }
+  .cardInner{ width:100%; height:100%; position:relative; transition:transform .6s; transform-style:preserve-3d; }
   .card.flipped .cardInner{ transform:rotateY(180deg); }
-  .cardFace{ position:absolute; inset:0; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); overflow:hidden; display:flex; flex-direction:column; align-items:center; padding:6px; box-sizing:border-box; background:#fff; }
-  .cardBack{ transform:rotateY(180deg); background:#fafafa; font-size:12px; text-align:center; padding:8px; gap:4px; }
+  .cardFace{ position:absolute; inset:0; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.18); background:white; display:flex; flex-direction:column; align-items:center; padding:6px; box-sizing:border-box; }
+  .cardBack{ transform:rotateY(180deg); background:#fcfff1; font-size:12px; text-align:center; padding:8px; overflow-wrap:break-word; }
 
-  /* card artwork area */
-  .cardCanvas{ width:100%; height:80px; border-radius:8px; overflow:hidden; background:linear-gradient(180deg,#ffffff,#f1f8e9); display:flex; align-items:center; justify-content:center; }
+  .cardCanvas{ width:100%; height:72px; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:linear-gradient(180deg,#ffffff,#f0fff0); border:1px solid rgba(0,0,0,0.06); }
+  .statsRow{ width:100%; display:flex; gap:6px; justify-content:space-between; margin-top:6px; }
+  .statBox{ flex:1; text-align:center; font-weight:700; font-size:12px; background:rgba(255,255,255,0.9); padding:4px 6px; border-radius:8px; }
 
-  .statsRow{ width:100%; margin-top:6px; display:flex; gap:6px; justify-content:space-between; align-items:center; font-size:12px; }
-  .statBox{ background:rgba(255,255,255,0.85); padding:3px 6px; border-radius:8px; flex:1; text-align:center; font-weight:600; color:#222; }
+  .hpBar{ width:100%; height:10px; background:#eee; border-radius:8px; overflow:hidden; margin-top:6px; }
+  .hpFill{ height:100%; width:100%; background:linear-gradient(90deg,#ff8a80,#d32f2f); transition:width .25s ease; }
+  .energyBar{ width:100%; height:8px; background:#eee; border-radius:8px; overflow:hidden; margin-top:6px; }
+  .energyFill{ height:100%; width:100%; background:linear-gradient(90deg,#fff59d,#ffd54f); transition:width .25s ease; }
 
-  .hpBar{ width:100%; height:10px; background:#eee; border-radius:6px; overflow:hidden; margin-top:6px; box-sizing:border-box;}
-  .hpFill{ height:100%; background:linear-gradient(90deg,#f44336,#e57373); width:100%; transition:width .25s ease; }
+  #actions{ margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  button.action{ background:#4caf50; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:700; cursor:pointer; }
+  button.action:disabled{ opacity:.45; cursor:not-allowed; }
 
-  .energyBar{ width:100%; height:8px; background:#eee; border-radius:6px; overflow:hidden; margin-top:6px;}
-  .energyFill{ height:100%; background:linear-gradient(90deg,#ffeb3b,#ffd54f); width:100%; transition:width .25s ease;}
+  #combatLog{ margin-top:12px; width:100%; max-width:1100px; background:#fff; padding:12px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.06); max-height:250px; overflow:auto; font-size:14px; }
 
-  #actions{ margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
-  button{ background:#4caf50; color:#fff; padding:8px 12px; border-radius:8px; border:none; cursor:pointer; font-weight:700; box-shadow:0 3px 0 rgba(0,0,0,0.08); }
-  button:disabled{ opacity:.5; cursor:not-allowed; transform:none; }
+  .damagePop, .healPop{ position:absolute; font-weight:800; pointer-events:none; z-index:2000; }
+  .damagePop{ color:#b71c1c; text-shadow:0 1px 0 #fff; animation:pop 900ms ease-out forwards; }
+  .healPop{ color:#1b5e20; animation:pop 900ms ease-out forwards; }
+  @keyframes pop{ 0%{ transform:translateY(0); opacity:1 } 100%{ transform:translateY(-28px); opacity:0 } }
 
-  #garden{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:8px; }
-  #finishDraft{ margin-top:10px; }
-
-  #combatLog{ width:96%; max-width:1100px; margin-top:12px; background:#fff; padding:10px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.06); max-height:220px; overflow:auto; font-size:14px; }
-  .damagePop, .healPop{ position:absolute; font-weight:800; pointer-events:none; }
-  .damagePop{ color:#d32f2f; text-shadow:0 1px 0 #fff; animation:pop 900ms ease-out forwards; }
-  .healPop{ color:#2e7d32; animation:pop 900ms ease-out forwards; }
-  @keyframes pop{ 0%{ transform:translateY(0); opacity:1 } 100%{ transform:translateY(-30px); opacity:0 } }
-
-  /* small screens */
+  /* responsive */
   @media (max-width:640px){
     :root{ --card-w:100px; --card-h:160px }
-    #progressBar{ width:80%;}
+    #flowerCanvas{ width:160px; height:160px; }
+    #progressBar{ width:84% }
   }
 </style>
 </head>
 <body>
 
 <!-- Loading screen -->
-<div id="loadingScreen" role="dialog" aria-label="Loading screen with growing flower and grass background">
+<div id="loadingScreen" role="dialog" aria-label="Loading screen">
   <div id="loadingText">Loading Overgrowth...</div>
-  <canvas id="flowerCanvas" width="200" height="200" aria-hidden="true"></canvas>
+  <canvas id="flowerCanvas" width="220" height="220" aria-hidden="true"></canvas>
   <div id="progressBar"><div id="progressFill"></div></div>
 </div>
 
-<!-- Game -->
+<!-- Game Container -->
 <div id="gameContainer">
   <h1>Overgrowth</h1>
 
-  <!-- Draft garden -->
-  <div id="garden" aria-label="Draft garden"></div>
-  <button id="finishDraft">Finish Draft</button>
+  <div class="topRow">
+    <div id="garden" aria-label="Draft garden"></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+      <button id="finishDraft" class="action">Finish Draft</button>
+      <div style="font-size:13px;color:#3e3e3e;max-width:200px;text-align:center">Pick exactly 3 cards from the garden, then press Finish Draft.</div>
+    </div>
+  </div>
 
-  <!-- Boards -->
   <div class="board">
-    <div class="playerBoard" id="playerBoard">
+    <div class="playerBoard">
       <h3>You</h3>
       <div class="cardsRow" id="playerActive"></div>
-      <div class="cardsRow" id="playerBench"></div>
     </div>
 
-    <div class="playerBoard" id="aiBoard">
+    <div class="playerBoard">
       <h3>AI</h3>
       <div class="cardsRow" id="aiActive"></div>
-      <div class="cardsRow" id="aiBench"></div>
     </div>
   </div>
 
@@ -108,170 +103,156 @@
 </div>
 
 <script>
-/* -------------------------
-   Game data & helpers
-   ------------------------- */
+/* ---------- Helpers & Data ---------- */
 const types = ['Sun','Water','Thorn','Fungal','Normal','Nocturnal'];
 const typeAdvantage = {'Nocturnal':'Fungal','Fungal':'Normal','Normal':'Thorn','Thorn':'Water','Water':'Sun','Sun':'Nocturnal'};
 
 let gardenDeck = [], playerDeck = [], aiDeck = [], combatLog = [];
-let playerFormation = {}, aiFormation = {}, currentPlayer = null;
+let playerFormation = {}, aiFormation = {}, currentPlayer = 'player';
 const actionsDiv = document.getElementById('actions');
 const combatLogEl = document.getElementById('combatLog');
 
-/* Logging */
 function log(msg, type='normal'){
   combatLog.push({msg,type});
-  combatLogEl.innerHTML = combatLog.map(e => `<div style="color:${e.type==='damage'?'#d32f2f':e.type==='heal'?'#2e7d32':'#111'}">${e.msg}</div>`).join('');
+  combatLogEl.innerHTML = combatLog.map(e => `<div style="color:${e.type==='damage'?'#b71c1c': e.type==='heal'?'#1b5e20':'#111'}">${e.msg}</div>`).join('');
   combatLogEl.scrollTop = combatLogEl.scrollHeight;
 }
 
-/* Safe random */
 function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 
-/* Card art draw (returns a canvas element) */
-function drawCardArt(name, type){
-  const cv = document.createElement('canvas');
-  cv.width = 120; cv.height = 80;
+function shuffle(a){ const arr = a.slice(); for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr; }
+
+/* ---------- Artwork & Card creation ---------- */
+function drawCardArt(name,type){
+  const cv = document.createElement('canvas'); cv.width = 120; cv.height = 72;
   const ctx = cv.getContext('2d');
-  const colors = {Sun:'#fff8e1', Water:'#e3f2fd', Thorn:'#e8f5e9', Fungal:'#f3e5f5', Normal:'#fafafa', Nocturnal:'#eceff1'};
-  ctx.fillStyle = colors[type] || '#fff';
+  const pal = {Sun:'#fff8e1', Water:'#e3f2fd', Thorn:'#e8f5e9', Fungal:'#f3e5f5', Normal:'#fafafa', Nocturnal:'#eceff1'};
+  ctx.fillStyle = pal[type] || '#fff';
   ctx.fillRect(0,0,cv.width,cv.height);
-  // simple icon circle
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cv.width/2,40,16,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle = '#bdbdbd'; ctx.strokeRect(0,0,cv.width,cv.height);
-  ctx.fillStyle = '#000'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center';
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.strokeRect(0,0,cv.width,cv.height);
+  ctx.fillStyle = '#222'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(name, cv.width/2, 20);
-  ctx.font='11px sans-serif'; ctx.fillText(type, cv.width/2, 36);
+  ctx.font = '11px sans-serif'; ctx.fillText(type, cv.width/2, 36);
   return cv;
 }
 
-/* Create card object */
 function createCard(name){
   const type = types[randInt(0, types.length-1)];
   const hp = randInt(12, 24);
   const atk = randInt(5, 12);
-  const energy = randInt(1,3);
-  const illustration = drawCardArt(name,type);
+  const energy = randInt(1, 3);
   return {
     name, type, hp, maxHp: hp, atk, baseAtk: atk,
-    energy, maxEnergy: energy, exhausted:false, illustration,
-    keywords: ['Quick','Poison','Regenerate','Shield'].slice(0, randInt(1,2))
+    energy, maxEnergy: energy, exhausted: false,
+    illustration: drawCardArt(name,type),
+    keywords: ['Quick','Poison','Regenerate','Shield'].slice(0, randInt(1,2)),
+    // element placeholder
+    element: null
   };
 }
 
-/* -------------------------
-   Loading screen (flower)
-   ------------------------- */
+/* ---------- Loading: growing flower that matches grass look ---------- */
+const loadingScreen = document.getElementById('loadingScreen');
 const flowerCanvas = document.getElementById('flowerCanvas');
 const fctx = flowerCanvas.getContext('2d');
 let loadProgress = 0;
-function drawFlowerFrame(p){ // p from 0..1
+
+function drawFlower(p){
   const W = flowerCanvas.width, H = flowerCanvas.height;
   fctx.clearRect(0,0,W,H);
-  // stem
+
+  // draw a subtle soft circle behind (like sun)
+  const grd = fctx.createRadialGradient(W/2, H/2, 10, W/2, H/2, 100);
+  grd.addColorStop(0, 'rgba(255,244,210,' + (0.5*p) +')');
+  grd.addColorStop(1, 'rgba(255,244,210,0)');
+  fctx.fillStyle = grd;
+  fctx.fillRect(0,0,W,H);
+
   fctx.save();
-  fctx.translate(W/2, H*0.85);
-  const stemH = 60 + p*120;
-  fctx.strokeStyle = '#2e7d32'; fctx.lineWidth=4;
+  fctx.translate(W/2, H*0.8);
+  const stemH = 30 + p*110; // grows taller
+  // stem
+  fctx.strokeStyle = '#2e7d32'; fctx.lineWidth = 4;
   fctx.beginPath(); fctx.moveTo(0,0); fctx.lineTo(0,-stemH); fctx.stroke();
   // leaves
-  fctx.fillStyle = '#66bb6a'; 
-  fctx.beginPath(); fctx.ellipse(-10, -stemH*0.6, 12, 6, -0.8, 0, Math.PI*2); fctx.fill();
-  fctx.beginPath(); fctx.ellipse(10, -stemH*0.6, 12, 6, 0.8, 0, Math.PI*2); fctx.fill();
-  // petals appear after 60%
+  fctx.fillStyle = '#5da55d';
+  fctx.beginPath(); fctx.ellipse(-14, -stemH*0.5, 14, 7, -0.7, 0, Math.PI*2); fctx.fill();
+  fctx.beginPath(); fctx.ellipse(14, -stemH*0.6, 12, 6, 0.8, 0, Math.PI*2); fctx.fill();
+  // petals after 60%
   if(p>0.6){
-    const t = (p-0.6)/0.4; // 0..1
+    const t = (p-0.6)/0.4; // 0..1 growth of petals
     const petalCount = 6;
-    fctx.fillStyle = '#ff8a65';
     for(let i=0;i<petalCount;i++){
-      const ang = i * (2*Math.PI/petalCount);
-      const rx = Math.cos(ang) * (12 + t*18);
-      const ry = -stemH + Math.sin(ang) * (12 + t*6);
-      fctx.beginPath();
-      fctx.ellipse(rx, ry, 8 + t*6, 12 + t*8, ang, 0, Math.PI*2);
-      fctx.fill();
+      const ang = i*(2*Math.PI/petalCount);
+      const rx = Math.cos(ang)*(12 + t*18);
+      const ry = -stemH + Math.sin(ang)*(6 + t*12);
+      fctx.save();
+      fctx.translate(rx, ry);
+      fctx.rotate(ang);
+      fctx.fillStyle = '#ffb3a7';
+      fctx.beginPath(); fctx.ellipse(0,0, 8 + t*6, 12 + t*6, 0, 0, Math.PI*2); fctx.fill();
+      fctx.restore();
     }
-    // center
     fctx.fillStyle = '#ffd54f';
-    fctx.beginPath(); fctx.arc(0,-stemH, 8 + t*6, 0, Math.PI*2); fctx.fill();
+    fctx.beginPath(); fctx.arc(0, -stemH, 8 + t*6, 0, Math.PI*2); fctx.fill();
   }
   fctx.restore();
 }
 
-/* progress loop (smooth) */
-const loadingScreen = document.getElementById('loadingScreen');
+// progress loop
 const progressFill = document.getElementById('progressFill');
-let loadingTimer = setInterval(()=>{
-  loadProgress += 0.01; if(loadProgress>1) loadProgress=1;
-  drawFlowerFrame(loadProgress);
+const loader = setInterval(()=>{
+  loadProgress += 0.01;
+  if(loadProgress>1) loadProgress=1;
+  drawFlower(loadProgress);
   progressFill.style.width = Math.round(loadProgress*100) + '%';
   if(loadProgress>=1){
-    clearInterval(loadingTimer);
-    // briefly show full flower, then reveal game
-    setTimeout(()=> {
-      loadingScreen.style.display = 'none';
-      document.getElementById('gameContainer').style.display = 'flex';
-      // initialize the rest of the game
-      initGame();
-    }, 600);
+    clearInterval(loader);
+    setTimeout(()=>{ loadingScreen.style.display='none'; document.getElementById('gameContainer').style.display='flex'; startNewGame(); }, 600);
   }
-}, 40);
+}, 35);
 
-/* -------------------------
-   Game initialization & UI
-   ------------------------- */
-
-function initGame(){
-  // prepare deck (same names)
+/* ---------- Game setup (draft -> combat) ---------- */
+function startNewGame(){
+  // prepare garden cards
   const names = ['Rose','Cactus','Mushroom','Sunflower','Nightshade','Fern','Lily','Ivy','Daisy','Orchid','Bamboo','Tulip'];
   gardenDeck = names.map(n => createCard(n));
-  playerDeck = []; aiDeck = [];
+  playerDeck = []; aiDeck = []; combatLog = []; combatLogEl.innerHTML='';
 
-  // render garden for drafting
-  const garden = document.getElementById('garden'); garden.innerHTML = '';
+  // render garden
+  const gardenEl = document.getElementById('garden'); gardenEl.innerHTML='';
   gardenDeck.forEach(card => {
-    const el = renderCardElement(card, /*showStats*/ false);
-    // clicking in garden selects for player draft
-    el.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      if(playerDeck.length < 3 && !card._drafted){
-        playerDeck.push(card);
-        card._drafted = true;
-        el.classList.add('highlight');
+    const el = renderCardElement(card, false);
+    el.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      if(playerDeck.length < 3 && !card._picked){
+        playerDeck.push(card); card._picked=true; el.classList.add('selected');
       }
     });
-    garden.appendChild(el);
+    gardenEl.appendChild(el);
   });
 
-  // let AI pick randomly
-  aiDeck = shuffleArray(gardenDeck.slice()).filter(c=>!c._drafted).slice(0,3);
-  // ensure aiDeck objects are flagged as drafted
-  aiDeck.forEach(c => c._drafted = true);
-
-  // show hint
-  log('Pick 3 cards from the garden, then press "Finish Draft".');
+  // AI picks (will be finalized when finishDraft clicked)
+  aiDeck = [];
   document.getElementById('finishDraft').disabled = false;
+  log('Pick 3 cards from the garden and press Finish Draft.');
 }
 
-/* card element rendering (with HP bars + energy) */
-function renderCardElement(card, showStats = true){
-  // if already created, return existing DOM to preserve binding
+/* render card DOM (front/back, hp bars) */
+function renderCardElement(card, showStats=true){
   if(card.element) return card.element;
 
-  const container = document.createElement('div'); container.className = 'card';
-  const inner = document.createElement('div'); inner.className = 'cardInner';
+  const container = document.createElement('div'); container.className='card';
+  const inner = document.createElement('div'); inner.className='cardInner';
   container.appendChild(inner);
 
-  // FRONT
-  const front = document.createElement('div'); front.className = 'cardFace cardFront';
-  const artWrap = document.createElement('div'); artWrap.className = 'cardCanvas';
+  const front = document.createElement('div'); front.className='cardFace cardFront';
+  const artWrap = document.createElement('div'); artWrap.className='cardCanvas';
   artWrap.appendChild(card.illustration);
   front.appendChild(artWrap);
 
-  // stats row
   if(showStats){
-    const statsRow = document.createElement('div'); statsRow.className = 'statsRow';
+    const statsRow = document.createElement('div'); statsRow.className='statsRow';
     const atkBox = document.createElement('div'); atkBox.className='statBox'; atkBox.textContent = 'ATK ' + card.atk;
     const nameBox = document.createElement('div'); nameBox.className='statBox'; nameBox.textContent = card.name;
     statsRow.appendChild(atkBox); statsRow.appendChild(nameBox);
@@ -280,37 +261,30 @@ function renderCardElement(card, showStats = true){
     // hp bar
     const hpBar = document.createElement('div'); hpBar.className='hpBar';
     const hpFill = document.createElement('div'); hpFill.className='hpFill';
-    hpBar.appendChild(hpFill);
-    front.appendChild(hpBar);
+    hpBar.appendChild(hpFill); front.appendChild(hpBar);
 
     // energy
-    const energyBar = document.createElement('div'); energyBar.className='energyBar';
-    const energyFill = document.createElement('div'); energyFill.className='energyFill';
-    energyBar.appendChild(energyFill);
-    front.appendChild(energyBar);
+    const enBar = document.createElement('div'); enBar.className='energyBar';
+    const enFill = document.createElement('div'); enFill.className='energyFill';
+    enBar.appendChild(enFill); front.appendChild(enBar);
 
-    // store elements for updates
     card._hpFill = hpFill;
-    card._energyFill = energyFill;
-    card._atkBox = atkBox;
-    card._nameBox = nameBox;
+    card._enFill = enFill;
   }
 
-  // BACK (full stats and keywords)
   const back = document.createElement('div'); back.className='cardFace cardBack';
   back.innerHTML = `<strong style="display:block;margin-bottom:6px">${card.name}</strong>
                     <div style="font-size:13px">Type: <strong>${card.type}</strong></div>
-                    <div style="margin-top:6px">ATK: <span class="back-atk">${card.atk}</span></div>
-                    <div>HP: <span class="back-hp">${card.hp}</span>/<span class="back-maxhp">${card.maxHp}</span></div>
-                    <div style="margin-top:6px">Energy: <span class="back-energy">${card.energy}</span></div>
+                    <div style="margin-top:6px">ATK: <span class="b-atk">${card.atk}</span></div>
+                    <div>HP: <span class="b-hp">${card.hp}</span>/<span class="b-max">${card.maxHp}</span></div>
+                    <div style="margin-top:6px">Energy: <span class="b-en">${card.energy}</span></div>
                     <div style="margin-top:8px;font-size:12px;color:#444">Keywords: ${card.keywords.join(', ')}</div>`;
 
   inner.appendChild(front);
   inner.appendChild(back);
 
-  // flip on click
-  container.addEventListener('click', (e)=>{
-    // avoid flipping if click comes from a control expecting different behavior
+  // flip on click (but not while choosing targets - UI logic will manage buttons)
+  container.addEventListener('click', (ev)=>{
     container.classList.toggle('flipped');
   });
 
@@ -318,248 +292,202 @@ function renderCardElement(card, showStats = true){
   return container;
 }
 
-/* Shuffle helper */
-function shuffleArray(arr){ const a = arr.slice(); for(let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
-
-/* -------------------------
-   Draft finish & Combat init
-   ------------------------- */
+/* ---------- Finish draft -> start combat ---------- */
 document.getElementById('finishDraft').addEventListener('click', ()=>{
   if(playerDeck.length !== 3){
-    alert('You must pick 3 cards to start the battle.');
+    alert('Please pick 3 cards to start.');
     return;
   }
-  // ensure aiDeck is 3 (if not already filled)
-  if(aiDeck.length < 3){
-    const remaining = gardenDeck.filter(c => !c._drafted);
-    aiDeck = aiDeck.concat(remaining.slice(0, 3-aiDeck.length));
-  }
+  // finalize AI picks if empty: choose 3 random non-picked
+  const remaining = gardenDeck.filter(c => !c._picked);
+  aiDeck = shuffle(remaining).slice(0,3);
   // prepare formations
   playerFormation.active = playerDeck.slice();
   playerFormation.bench = [];
   aiFormation.active = aiDeck.slice();
   aiFormation.bench = [];
-
-  // hide draft UI
+  // hide draft area
   document.getElementById('garden').style.display = 'none';
   document.getElementById('finishDraft').style.display = 'none';
-
-  log('Draft complete — combat begins!');
+  log('Draft complete. Combat begins!');
   updateBoard();
   promptPlayerAction();
 });
 
-/* -------------------------
-   Board update & helpers
-   ------------------------- */
+/* ---------- Board update & popups ---------- */
 function updateBoard(){
-  // render each formation's active cards
-  function render(containerId, cards){
-    const container = document.getElementById(containerId);
-    container.innerHTML = '';
+  function renderRow(containerId, cards){
+    const row = document.getElementById(containerId); row.innerHTML = '';
     cards.forEach(card => {
-      // create element if needed
       const el = renderCardElement(card, true);
-      // update HP/energy fills
+      // update hp/energy bars & back info
       if(card._hpFill){
         const pct = Math.max(0, (card.hp / card.maxHp) * 100);
         card._hpFill.style.width = pct + '%';
       }
-      if(card._energyFill){
-        const ePct = Math.max(0, (card.energy / card.maxEnergy) * 100);
-        card._energyFill.style.width = ePct + '%';
+      if(card._enFill){
+        const ep = Math.max(0, (card.energy / (card.maxEnergy||1)) * 100);
+        card._enFill.style.width = ep + '%';
       }
-      // update back details
       const back = card.element.querySelector('.cardBack');
       if(back){
-        back.querySelector('.back-hp').textContent = Math.max(0, card.hp);
-        back.querySelector('.back-maxhp').textContent = card.maxHp;
-        back.querySelector('.back-energy').textContent = Math.max(0, card.energy);
-        back.querySelector('.back-atk').textContent = card.atk;
+        back.querySelector('.b-hp').textContent = Math.max(0, card.hp);
+        back.querySelector('.b-max').textContent = card.maxHp;
+        back.querySelector('.b-en').textContent = Math.max(0, card.energy);
+        back.querySelector('.b-atk').textContent = card.atk;
       }
-      // if dead, visually dim
-      if(card.hp <= 0) { card.element.style.opacity = '0.45'; }
-      else card.element.style.opacity = '1';
-      container.appendChild(card.element);
+      // dim dead
+      card.element.style.opacity = card.hp <= 0 ? 0.45 : 1;
+      row.appendChild(card.element);
     });
   }
-  render('playerActive', playerFormation.active || []);
-  render('aiActive', aiFormation.active || []);
+  renderRow('playerActive', playerFormation.active || []);
+  renderRow('aiActive', aiFormation.active || []);
 }
 
-/* show floating damage/heal on top of a card element */
-function showPopupOnCard(card, text, kind='damage'){
+/* floating popups */
+function showPopup(card, text, kind='damage'){
   const el = card.element;
   if(!el) return;
   const rect = el.getBoundingClientRect();
   const pop = document.createElement('div');
-  pop.textContent = text;
   pop.className = kind==='damage' ? 'damagePop' : 'healPop';
+  pop.textContent = text;
   document.body.appendChild(pop);
-  // place near the card center
-  pop.style.left = (rect.left + rect.width/2 - 10) + 'px';
-  pop.style.top = (rect.top + 10) + 'px';
-  setTimeout(()=> { if(pop.parentNode) pop.parentNode.removeChild(pop); }, 900);
+  pop.style.left = (rect.left + rect.width/2 - 12) + 'px';
+  pop.style.top = (rect.top + 6) + 'px';
+  setTimeout(()=> { pop.remove(); }, 900);
 }
 
-/* -------------------------
-   Player actions & flow
-   ------------------------- */
+/* ---------- Player turns & actions ---------- */
 function promptPlayerAction(){
-  if(!playerFormation.active.length || !aiFormation.active.length) return checkVictory();
+  if(checkVictory()) return;
   actionsDiv.innerHTML = '';
-  // if none ready, reset exhaustion and let them act again
-  const anyReady = playerFormation.active.some(c=>!c.exhausted && c.hp>0);
+  // if no ready cards, reset round (refresh energies)
+  const anyReady = playerFormation.active.some(c => c.hp > 0 && !c.exhausted);
   if(!anyReady){
-    // restore all energies and exhaustion for a new round
-    playerFormation.active.forEach(c=>{ c.exhausted = false; c.energy = c.maxEnergy; });
-    aiFormation.active.forEach(c=>{ c.exhausted = false; c.energy = c.maxEnergy; });
+    playerFormation.active.forEach(c => { c.exhausted = false; c.energy = c.maxEnergy; });
+    aiFormation.active.forEach(c => { c.exhausted = false; c.energy = c.maxEnergy; });
     updateBoard();
   }
-  // show a button for each ready card
+  // create button per available card
   playerFormation.active.forEach(card => {
     if(card.hp <= 0) return;
     if(card.exhausted) return;
     const btn = document.createElement('button');
+    btn.className = 'action';
     btn.textContent = `Use ${card.name}`;
     btn.addEventListener('click', ()=> chooseCardAction(card));
     actionsDiv.appendChild(btn);
   });
 }
 
-/* When player chooses a card to act with */
 function chooseCardAction(card){
   actionsDiv.innerHTML = '';
+  if(card.hp <= 0) return;
   // Attack
-  const attackBtn = document.createElement('button'); attackBtn.textContent = 'Attack';
-  attackBtn.addEventListener('click', ()=> chooseTarget(card));
-  actionsDiv.appendChild(attackBtn);
+  const atkBtn = document.createElement('button'); atkBtn.className='action'; atkBtn.textContent = 'Attack';
+  atkBtn.addEventListener('click', ()=> chooseTarget(card));
+  actionsDiv.appendChild(atkBtn);
 
-  // Ability (simple heal ability)
-  const abilityBtn = document.createElement('button'); abilityBtn.textContent = 'Use Ability';
-  abilityBtn.addEventListener('click', ()=>{
-    // simple ability: heal lowest ally for 5
-    const allies = playerFormation.active.filter(c=>c.hp>0);
+  // Ability: heal lowest ally for 5 (cost 1 energy)
+  const ablBtn = document.createElement('button'); ablBtn.className='action'; ablBtn.textContent = 'Use Ability';
+  ablBtn.addEventListener('click', ()=>{
+    if(card.energy <= 0){ alert('No energy to use ability'); return; }
+    const allies = playerFormation.active.filter(a=>a.hp>0);
     if(!allies.length) return;
-    const target = allies.reduce((a,b)=> a.hp < b.hp ? a : b, allies[0]);
-    if(card.energy <= 0){
-      alert('No energy to use ability');
-      return;
-    }
+    let target = allies.reduce((a,b)=> a.hp < b.hp ? a : b, allies[0]);
     target.hp = Math.min(target.maxHp, target.hp + 5);
     card.energy = Math.max(0, card.energy - 1);
     if(card.energy === 0) card.exhausted = true;
-    showPopupOnCard(target, '+5', 'heal');
+    showPopup(target, '+5', 'heal');
     log(`${card.name} uses ability and heals ${target.name} +5.`, 'heal');
     updateBoard();
-    setTimeout(()=> aiTurn(), 450);
+    setTimeout(()=> aiTurn(), 500);
   });
-  actionsDiv.appendChild(abilityBtn);
+  actionsDiv.appendChild(ablBtn);
 
   // Pass
-  const passBtn = document.createElement('button'); passBtn.textContent = 'Pass';
-  passBtn.addEventListener('click', ()=>{
-    card.exhausted = true;
-    updateBoard();
-    setTimeout(()=> aiTurn(), 300);
-  });
+  const passBtn = document.createElement('button'); passBtn.className='action'; passBtn.textContent='Pass';
+  passBtn.addEventListener('click', ()=>{ card.exhausted = true; updateBoard(); setTimeout(()=> aiTurn(), 300); });
   actionsDiv.appendChild(passBtn);
 }
 
-/* Select a target to attack from AI active cards */
 function chooseTarget(attacker){
-  if(!aiFormation.active.length){
-    log('No targets.', 'normal'); return;
-  }
-  actionsDiv.innerHTML = '';
+  actionsDiv.innerHTML = '<div style="padding:6px;color:#333">Choose target:</div>';
   aiFormation.active.forEach(target => {
     if(target.hp <= 0) return;
-    const btn = document.createElement('button');
-    btn.textContent = target.name;
+    const btn = document.createElement('button'); btn.className='action'; btn.textContent = target.name;
     btn.addEventListener('click', ()=>{
-      // compute dmg with type adv
+      // compute damage with simple type advantage
       let dmg = attacker.atk;
       if(typeAdvantage[attacker.type] === target.type) dmg += 8;
-      target.hp = target.hp - dmg;
-      showPopupOnCard(target, '-' + dmg, 'damage');
-      log(`${attacker.name} attacks ${target.name} for ${dmg}`, 'damage');
-      // update energy/exhaustion
+      target.hp = Math.max(0, target.hp - dmg);
       attacker.energy = Math.max(0, attacker.energy - 1);
       if(attacker.energy === 0) attacker.exhausted = true;
-      // remove dead
+      showPopup(target, '-' + dmg, 'damage');
+      log(`${attacker.name} attacks ${target.name} for ${dmg}`, 'damage');
       if(target.hp <= 0){
-        target.hp = 0;
-        aiFormation.active = aiFormation.active.filter(c => c !== target);
         log(`${target.name} was defeated!`);
+        aiFormation.active = aiFormation.active.filter(c => c !== target);
       }
       updateBoard();
-      // small delay then AI turn
       setTimeout(()=> aiTurn(), 500);
     });
     actionsDiv.appendChild(btn);
   });
 }
 
-/* -------------------------
-   AI logic
-   ------------------------- */
+/* ---------- AI turn ---------- */
 function aiTurn(){
-  // check victory
   if(checkVictory()) return;
-
-  // pick a non-exhausted AI card
-  const actor = aiFormation.active.find(c=>!c.exhausted && c.hp > 0);
+  // pick a non-exhausted AI actor
+  const actor = aiFormation.active.find(c => c.hp > 0 && !c.exhausted);
   if(!actor){
     // reset round
-    playerFormation.active.forEach(c=>{ c.exhausted = false; c.energy = c.maxEnergy; });
-    aiFormation.active.forEach(c=>{ c.exhausted = false; c.energy = c.maxEnergy; });
+    playerFormation.active.forEach(c => { c.exhausted = false; c.energy = c.maxEnergy; });
+    aiFormation.active.forEach(c => { c.exhausted = false; c.energy = c.maxEnergy; });
     updateBoard();
     promptPlayerAction();
     return;
   }
-
-  // pick the player's lowest HP as target
-  let target = playerFormation.active.filter(c=>c.hp>0).reduce((a,b)=> a.hp < b.hp ? a : b, playerFormation.active[0]);
-  if(!target){
-    // nothing to target
-    updateBoard(); promptPlayerAction(); return;
-  }
+  // choose target: player's lowest HP
+  const potential = playerFormation.active.filter(c => c.hp > 0);
+  if(!potential.length){ updateBoard(); promptPlayerAction(); return; }
+  const target = potential.reduce((a,b)=> a.hp < b.hp ? a : b, potential[0]);
   // attack
   let dmg = actor.atk;
   if(typeAdvantage[actor.type] === target.type) dmg += 8;
   target.hp = Math.max(0, target.hp - dmg);
-  showPopupOnCard(target, '-' + dmg, 'damage');
-  log(`AI's ${actor.name} attacks ${target.name} for ${dmg}`, 'damage');
   actor.energy = Math.max(0, actor.energy - 1);
   if(actor.energy === 0) actor.exhausted = true;
+  showPopup(target, '-' + dmg, 'damage');
+  log(`AI's ${actor.name} attacks ${target.name} for ${dmg}`, 'damage');
   if(target.hp <= 0){
     log(`${target.name} was defeated!`);
     playerFormation.active = playerFormation.active.filter(c => c !== target);
   }
-
   updateBoard();
-  // resume player after a small delay
-  setTimeout(()=> promptPlayerAction(), 500);
+  setTimeout(()=> promptPlayerAction(), 600);
 }
 
-/* -------------------------
-   Victory check
-   ------------------------- */
+/* ---------- Victory ---------- */
 function checkVictory(){
   if(!playerFormation.active || !aiFormation.active) return false;
-  if(playerFormation.active.length === 0){
+  if(playerFormation.active.filter(c=>c.hp>0).length === 0){
     alert('AI Wins!');
     log('AI Wins!');
+    actionsDiv.innerHTML = '';
     return true;
   }
-  if(aiFormation.active.length === 0){
+  if(aiFormation.active.filter(c=>c.hp>0).length === 0){
     alert('You Win!');
     log('You Win!');
+    actionsDiv.innerHTML = '';
     return true;
   }
   return false;
 }
-
 </script>
 </body>
 </html>
