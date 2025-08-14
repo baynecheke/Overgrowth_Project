@@ -1,1 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overgrowth Game</title>
+<style>
+body {margin:0;font-family:sans-serif;background:#87CEEB;overflow:hidden;position:relative;}
+
+/* Loading Screen */
+#loadingScreen{
+  position:fixed; top:0; left:0; width:100%; height:100%;
+  display:flex; justify-content:center; align-items:center; flex-direction:column;
+  background:#87CEEB; z-index:1000;
+}
+#sun{
+  width:60px; height:60px; border-radius:50%; background:yellow;
+  box-shadow:0 0 30px yellow; animation:glow 2s ease-in-out infinite;
+  margin-bottom:20px;
+}
+#loadingBarContainer{
+  width:80%; height:20px; background:#fff; border-radius:10px; overflow:hidden; position:relative;
+}
+#loadingBar{width:0%; height:100%; background:gold; transition:width 0.2s ease;}
+#loadingText{margin-top:10px; font-weight:bold;}
+
+/* Game Screen */
+#gameScreen{display:none; padding:20px; text-align:center; position:relative;}
+#playerPanel, #enemyPanel{margin:10px; display:flex; justify-content:center; flex-wrap:wrap;}
+.card{display:inline-block; width:120px; height:auto; margin:10px; padding:5px; background:#fff; border:2px solid #333; border-radius:8px; position:relative; cursor:pointer; transition:transform 0.3s,border 0.3s,box-shadow 0.3s;}
+.card:hover{transform:scale(1.05); box-shadow:0 0 10px rgba(0,0,0,0.2);}
+.card.selected{border:3px solid gold; box-shadow:0 0 20px yellow;}
+.card.enemy:hover{box-shadow:0 0 20px crimson;}
+.healthBar{width:100%; height:12px; background:red; border-radius:6px; overflow:hidden; margin-top:4px;}
+.healthFill{height:100%; background:green; width:100%; transition:width 0.5s ease;}
+.cardData{font-size:12px; margin-top:4px; text-align:left;}
+#message{margin-top:20px; font-weight:bold; min-height:24px;}
+#options{margin-top:10px;}
+.optionBtn{padding:8px 12px; margin:3px; font-size:14px; cursor:pointer; transition:background 0.3s;}
+.optionBtn:hover{background:#ffd700;}
+#winScreen{display:none; text-align:center; padding:20px;}
+button{padding:10px 20px; font-size:16px; margin-top:20px;}
+
+/* Settings Button */
+#settingsBtn{
+  position:absolute; top:10px; right:10px; z-index:100;
+  padding:8px 12px; cursor:pointer; background:#fff; border:2px solid #333; border-radius:6px;
+}
+#settingsPanel{
+  position:absolute; top:50px; right:10px; width:180px; background:#fff; border:2px solid #333; border-radius:8px; padding:10px;
+  display:none; z-index:101;
+}
+#settingsPanel label{display:block; margin:8px 0; cursor:pointer;}
+
+/* Animations */
+@keyframes glow{0%{box-shadow:0 0 10px yellow;}50%{box-shadow:0 0 35px yellow;}100%{box-shadow:0 0 10px yellow;}}
+</style>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loadingScreen">
+  <div id="sun"></div>
+  <div id="loadingBarContainer">
+    <div id="loadingBar"></div>
+  </div>
+  <p id="loadingText">Loading 0%</p>
+</div>
+
+<!-- Game Screen -->
+<div id="gameScreen">
+  <button id="settingsBtn">Settings ⚙️</button>
+  <div id="settingsPanel">
+    <label><input type="checkbox" id="muteMusic"> Mute Music</label>
+    <label><input type="checkbox" id="muteSFX"> Mute Sound Effects</label>
+    <button onclick="closeSettings()">Close</button>
+  </div>
+
+  <h1>Overgrowth</h1>
+  <h3>Your Cards</h3>
+  <div id="playerPanel"></div>
+  <h3>Enemy Cards</h3>
+  <div id="enemyPanel"></div>
+  <p id="message"></p>
+  <div id="options"></div>
+</div>
+
+<!-- Win Screen -->
+<div id="winScreen">
+<h1 id="winMessage"></h1>
+<button onclick="restartGame()">Restart</button>
+</div>
+
+<script>
+// ---------------- Loading Screen ----------------
+const loadingBar=document.getElementById('loadingBar');
+const loadingText=document.getElementById('loadingText');
+const loadingScreen=document.getElementById('loadingScreen');
+const gameScreen=document.getElementById('gameScreen');
+
+let loadPercent=0;
+const loadInterval=setInterval(()=>{
+  loadPercent++;
+  loadingBar.style.width=loadPercent+'%';
+  loadingText.textContent='Loading '+loadPercent+'%';
+  if(loadPercent>=100){
+    clearInterval(loadInterval);
+    setTimeout(()=>{
+      loadingScreen.style.display='none';
+      gameScreen.style.display='block';
+      startGame();
+    },500);
+  }
+},30);
+
+// ---------------- Audio Setup ----------------
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let musicMuted=false;
+let sfxMuted=false;
+
+function playSound(frequency,duration=0.2,type='square'){
+  if(sfxMuted) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = frequency;
+  gain.gain.setValueAtTime(0.2,audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+duration);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime+duration);
+}
+
+function playCardSelect(){ playSound(660,0.2,'sine'); }
+function playAttack(){ playSound(440,0.3,'square'); }
+function playHeal(){ playSound(550,0.3,'triangle'); }
+function playWin(){ playSound(880,0.5,'triangle'); }
+function playLose(){ playSound(220,0.5,'sawtooth'); }
+
+let bgInterval=null;
+function playBackgroundMusic(){
+  if(musicMuted) return;
+  const bpm=90;
+  const interval=(60/bpm)*1000;
+  const notes=[261.63,293.66,329.63,349.23,392.00];
+  bgInterval=setInterval(()=>{
+    if(musicMuted) return;
+    const osc=audioCtx.createOscillator();
+    const gain=audioCtx.createGain();
+    osc.type='sine';
+    osc.frequency.value=notes[Math.floor(Math.random()*notes.length)];
+    gain.gain.value=0.1;
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime+0.3);
+  },interval);
+}
+
+function stopBackgroundMusic(){
+  if(bgInterval) clearInterval(bgInterval);
+}
+
+// ---------------- Game Data ----------------
+let playerCards=[],enemyCards=[];
+let selectedPlayerCard=null,selectedAction=null;
+function createCard(name,hp,actions){return{name,maxHp:hp,hp,actions};}
+function draftCards(deck,count){
+  const draft=[]; const copy=[...deck];
+  for(let i=0;i<count;i++){
+    const index=Math.floor(Math.random()*copy.length);
+    draft.push(copy.splice(index,1)[0]);
+  }
+  return draft;
+}
+
+function startGame(){initCards(); renderCards();}
+
+// Expanded Card Pool
+function initCards(){
+const playerDeck=[
+createCard('Sunflower',40,[{name:'Sunbeam',type:'attack',value:15},{name:'Grow',type:'buff',value:10}]),
+createCard('Rose',50,[{name:'Thorn Strike',type:'attack',value:20},{name:'Shield',type:'buff',value:15}]),
+createCard('Tulip',35,[{name:'Petal Slash',type:'attack',value:12},{name:'Heal',type:'buff',value:10}]),
+createCard('Daisy',30,[{name:'Quick Hit',type:'attack',value:10},{name:'Regenerate',type:'buff',value:12}]),
+createCard('Orchid',45,[{name:'Poison Bloom',type:'attack',value:18},{name:'Camouflage',type:'buff',value:12}]),
+createCard('Lily',38,[{name:'Water Splash',type:'attack',value:14},{name:'Revitalize',type:'buff',value:15}]),
+createCard('Marigold',32,[{name:'Solar Beam',type:'attack',value:16},{name:'Harden',type:'buff',value:10}]),
+createCard('Poppy',28,[{name:'Sleep Dust',type:'attack',value:12},{name:'Shield',type:'buff',value:8}]),
+createCard('Iris',36,[{name:'Petal Storm',type:'attack',value:18},{name:'Focus',type:'buff',value:12}]),
+createCard('Carnation',33,[{name:'Thorn Whip',type:'attack',value:15},{name:'Regrow',type:'buff',value:10}])
+];
+
+const enemyDeck=[
+createCard('Thorn',30,[{name:'Spike',type:'attack',value:12},{name:'Harden',type:'buff',value:8}]),
+createCard('Venus Flytrap',45,[{name:'Bite',type:'attack',value:18},{name:'Absorb',type:'buff',value:10}]),
+createCard('Cactus',40,[{name:'Prickle',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
+createCard('Poison Ivy',35,[{name:'Poison',type:'attack',value:14},{name:'Toughen',type:'buff',value:8}]),
+createCard('Bramble',38,[{name:'Entangle',type:'attack',value:16},{name:'Resist',type:'buff',value:10}]),
+createCard('Snapdragon',34,[{name:'Fire Breath',type:'attack',value:18},{name:'Shield',type:'buff',value:12}]),
+createCard('Weeping Willow',50,[{name:'Root Grab',type:'attack',value:20},{name:'Regrow',type:'buff',value:15}]),
+createCard('Nightshade',40,[{name:'Shadow Strike',type:'attack',value:17},{name:'Camouflage',type:'buff',value:10}]),
+createCard('Bamboo',36,[{name:'Rapid Slash',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
+createCard('Creeper Vine',32,[{name:'Wrap',type:'attack',value:14},{name:'Harden',type:'buff',value:8}])
+];
+
+playerCards=draftCards(playerDeck,3);
+enemyCards=draftCards(enemyDeck,3);
+}
+
+// ---------------- Rendering & Gameplay ----------------
+const playerPanel=document.getElementById('playerPanel');
+const enemyPanel=document.getElementById('enemyPanel');
+const message=document.getElementById('message');
+const optionsDiv=document.getElementById('options');
+
+function renderCards(){
+playerPanel.innerHTML=''; enemyPanel.innerHTML='';
+playerCards.forEach((card,i)=>{
+  const div=document.createElement('div');
+  div.className='card'; if(i===selectedPlayerCard) div.classList.add('selected');
+  div.innerHTML=`<strong>${card.name}</strong>
+  <div class="cardData">HP: ${card.hp}/${card.maxHp}<br>Actions:<br>${card.actions.map(a=>a.name).join(', ')}</div>
+  <div class="healthBar"><div class="healthFill" style="width:${(card.hp/card.maxHp*100)}%"></div></div>`;
+  div.onclick=()=>selectPlayerCard(i);
+  playerPanel.appendChild(div);
+});
+enemyCards.forEach((card,i)=>{
+  const div=document.createElement('div');
+  div.className='card enemy';
+  div.innerHTML=`<strong>${card.name}</strong>
+  <div class="cardData">HP: ${card.hp}/${card.maxHp}<br>Actions:<br>${card.actions.map(a=>a.name).join(', ')}</div>
+  <div class="healthBar"><div class="healthFill" style="width:${(card.hp/card.maxHp*100)}%"></div></div>`;
+  div.onclick=()=>{ 
+    if(selectedAction && selectedAction.type==='attack' && selectedPlayerCard!==null) {
+      performAction(selectedPlayerCard,selectedAction,i);
+    }
+  };
+  enemyPanel.appendChild(div);
+});
+}
+
+function selectPlayerCard(index){
+selectedPlayerCard=index; selectedAction=null; optionsDiv.innerHTML='';
+const card=playerCards[index];
+card.actions.forEach(act=>{
+  const btn=document.createElement('button'); btn.className='optionBtn'; btn.textContent=act.name;
+  btn.onclick=()=>{
+    selectedAction=act; 
+    if(act.type==='buff'){
+      card.hp+=act.value; if(card.hp>card.maxHp) card.hp=card.maxHp;
+      message.textContent=`${card.name} used ${act.name} and healed ${act.value}!`;
+      playHeal(); // Play heal sound
+      optionsDiv.innerHTML=''; renderCards();
+      setTimeout(enemyTurn,700);
+    } else{
+      message.textContent='Select an enemy card to attack.';
+    }
+  };
+  optionsDiv.appendChild(btn);
+});
+renderCards();
+}
+
+function performAction(playerIndex,action,enemyIndex){
+const player=playerCards[playerIndex];
+const target=enemyCards[enemyIndex];
+target.hp-=action.value;
+message.textContent=`${player.name} used ${action.name} on ${target.name} for ${action.value}!`;
+playAttack();
+if(target.hp<=0) enemyCards.splice(enemyIndex,1);
+selectedPlayerCard=null; selectedAction=null; optionsDiv.innerHTML='';
+renderCards();
+if(enemyCards.length===0) return endGame('You Win!');
+setTimeout(enemyTurn,700);
+}
+
+function enemyTurn(){
+if(playerCards.length===0) return;
+const card=enemyCards[Math.floor(Math.random()*enemyCards.length)];
+const action=card.actions[Math.floor(Math.random()*card.actions.length)];
+if(action.type==='attack'){
+const target=playerCards[Math.floor(Math.random()*playerCards.length)];
+target.hp-=action.value;
+message.textContent=`Enemy ${card.name} used ${action.name} on ${target.name} for ${action.value}!`;
+playAttack();
+if(target.hp<=0) playerCards=playerCards.filter(c=>c!==target);
+} else{
+card.hp+=action.value; if(card.hp>card.maxHp) card.hp=card.maxHp;
+message.textContent=`Enemy ${card.name} used ${action.name} and healed ${action.value}!`;
+playHeal();
+}
+renderCards();
+if(playerCards.length===0) return endGame('You Lose!');
+}
+
+// ---------------- End & Restart ----------------
+const winScreen=document.getElementById('winScreen');
+const winMessage=document.getElementById('winMessage');
+function endGame(result){
+  gameScreen.style.display='none'; 
+  winScreen.style.display='block'; 
+  winMessage.textContent=result;
+  if(result.includes('Win')) playWin(); else playLose();
+}
+function restartGame(){
+  initCards();winScreen.style.display='none';gameScreen.style.display='block';message.textContent='';optionsDiv.innerHTML='';renderCards();
+}
+
+// ---------------- Settings Panel ----------------
+const settingsBtn=document.getElementById('settingsBtn');
+const settingsPanel=document.getElementById('settingsPanel');
+settingsBtn.onclick=()=>{settingsPanel.style.display=settingsPanel.style.display==='block'?'none':'block';};
+function closeSettings(){settingsPanel.style.display='none';}
+
+document.getElementById('muteMusic').addEventListener('change',(e)=>{
+  musicMuted=e.target.checked;
+});
+document.getElementById('muteSFX').addEventListener('change',(e)=>{
+  sfxMuted=e.target.checked;
+});
+
+// ---------------- Start Background Music on First Click ----------------
+document.body.addEventListener('click', ()=>{
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  playBackgroundMusic();
+}, {once:true});
+</script>
+</body>
+</html>
 
