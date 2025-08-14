@@ -3,10 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Overgrowth - Full Game</title>
+<title>Overgrowth - Interactive Combat</title>
 <style>
 body { margin:0; font-family:'Segoe UI',sans-serif; background:#e8f5e9; display:flex; justify-content:center; align-items:center; min-height:100vh; overflow-x:hidden;}
-#loadingScreen { position:absolute; width:100%; height:100%; background:url('https://i.imgur.com/1rYv7jk.png') center/cover no-repeat; display:flex; justify-content:center; align-items:center; font-size:3em; color:white; text-shadow:2px 2px 6px black; z-index:10; }
+#loadingScreen { position:absolute; width:100%; height:100%; background:url('https://i.imgur.com/1rYv7jk.png') center/cover no-repeat; display:flex; flex-direction:column; justify-content:center; align-items:center; color:white; text-shadow:2px 2px 6px black; font-size:2em; z-index:10;}
+#progressBar { width:80%; height:20px; background:#ddd; border-radius:10px; margin-top:20px; overflow:hidden;}
+#progressFill { width:0%; height:100%; background:#4caf50;}
 #gameContainer { display:none; flex-direction:column; align-items:center; width:100%; max-width:1200px; }
 .board { display:flex; justify-content:space-between; width:100%; margin-top:20px; }
 .playerBoard { display:flex; flex-direction:column; align-items:center; }
@@ -20,19 +22,22 @@ body { margin:0; font-family:'Segoe UI',sans-serif; background:#e8f5e9; display:
 .card .energyBar { height:6px; width:100%; background:#ddd; border-radius:3px; overflow:hidden; margin-top:2px; }
 .card .energyFill { height:100%; background:#ffeb3b; transition:width 0.5s; }
 .card .status { position:absolute; bottom:5px; left:5px; font-size:10px; color:#333; }
-.damagePop { position:absolute; color:red; font-weight:bold; animation:pop 0.8s ease-out forwards; }
-.healPop { position:absolute; color:green; font-weight:bold; animation:pop 0.8s ease-out forwards; }
-@keyframes pop { 0% {opacity:1; transform:translateY(0);} 100% {opacity:0; transform:translateY(-30px);} }
-button { margin:10px; padding:10px 20px; font-size:16px; border-radius:5px; border:none; background:#4caf50; color:white; cursor:pointer; }
+#actions { margin-top:10px; }
+button { margin:5px; padding:8px 15px; font-size:14px; border-radius:5px; border:none; background:#4caf50; color:white; cursor:pointer; }
 button:hover { background:#45a049; }
 #garden { display:flex; flex-wrap:wrap; justify-content:center; margin-top:10px; }
 #combatLog { max-height:200px; overflow-y:auto; width:90%; background:#fff; padding:10px; margin-top:10px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.2); font-size:14px; }
-.glow { animation:glow 0.6s ease-in-out; }
-@keyframes glow { 0%{box-shadow:0 0 0px yellow;} 50%{box-shadow:0 0 15px yellow;} 100%{box-shadow:0 0 0px yellow;} }
+.damagePop { position:absolute; color:red; font-weight:bold; animation:pop 0.8s ease-out forwards; }
+.healPop { position:absolute; color:green; font-weight:bold; animation:pop 0.8s ease-out forwards; }
+@keyframes pop { 0% {opacity:1; transform:translateY(0);} 100% {opacity:0; transform:translateY(-30px);} }
+.highlight { box-shadow:0 0 15px yellow;}
 </style>
 </head>
 <body>
-<div id="loadingScreen">Loading...</div>
+<div id="loadingScreen">
+  <div>Loading Overgrowth...</div>
+  <div id="progressBar"><div id="progressFill"></div></div>
+</div>
 <div id="gameContainer">
 <h1>Overgrowth</h1>
 <div id="garden"></div>
@@ -53,22 +58,25 @@ button:hover { background:#45a049; }
 <div class="cardsRow" id="aiBench"></div>
 </div>
 </div>
+<div id="actions"></div>
 <div id="combatLog"></div>
 </div>
 <script>
-setTimeout(() => {
-    document.getElementById('loadingScreen').style.display='none';
-    document.getElementById('gameContainer').style.display='flex';
-    initGame();
-}, 6000);
+// Loading animation
+let progress=0;
+let loadInterval=setInterval(()=>{
+  progress+=1.66;
+  document.getElementById('progressFill').style.width=progress+'%';
+  if(progress>=100){ clearInterval(loadInterval); document.getElementById('loadingScreen').style.display='none'; document.getElementById('gameContainer').style.display='flex'; initGame(); }
+},100);
 
-// Type and Advantage
+// Types and advantages
 const types=['Sun','Water','Thorn','Fungal','Normal','Nocturnal'];
 const typeAdvantage={'Nocturnal':'Fungal','Fungal':'Normal','Normal':'Thorn','Thorn':'Water','Water':'Sun','Sun':'Nocturnal'};
 
-// Game Variables
+// Game variables
 let gardenDeck=[], playerDeck=[], aiDeck=[], combatLog=[];
-let playerFormation={}, aiFormation={};
+let playerFormation={}, aiFormation={}, playerTurnStep=0, awaitingAction=false;
 
 // Logging
 function log(msg){ combatLog.push(msg); const logEl=document.getElementById('combatLog'); logEl.innerHTML=combatLog.join('<br>'); logEl.scrollTop=logEl.scrollHeight; }
@@ -91,32 +99,30 @@ function createCard(name){
     };
 }
 
-// Initialize Game
+// Initialize game and drafting
 function initGame(){
     const garden=document.getElementById('garden'); garden.innerHTML='';
     const cardNames=['Rose','Cactus','Mushroom','Sunflower','Nightshade','Fern','Lily','Ivy','Daisy','Orchid','Bamboo','Tulip'];
     gardenDeck=cardNames.map(name=>createCard(name));
-    // Drafting Phase 1
     gardenDeck.slice(0,6).forEach(card=>{
         const el=createCardElement(card);
         el.onclick=()=>{ if(playerDeck.length<3){playerDeck.push(card); garden.removeChild(el);} };
         garden.appendChild(el);
     });
-    // AI drafts 3 cards avoiding overlap
     aiDeck=aiDraft(3,gardenDeck.slice(6));
 }
 
-// AI Drafting Logic
+// AI draft
 function aiDraft(n,cards){
     let selected=[];
     while(selected.length<n){
-        let best=cards.reduce((a,b)=> (b.hp+b.atk)>(a.hp+a.atk)?b:a );
+        let best=cards.reduce((a,b)=>(b.hp+b.atk)>(a.hp+a.atk)?b:a);
         selected.push(best); cards=cards.filter(c=>c!==best);
     }
     return selected;
 }
 
-// Create Card Element
+// Card element
 function createCardElement(card){
     const el=document.createElement('div'); el.classList.add('card');
     el.innerHTML=`<div class="name">${card.name}</div>
@@ -127,28 +133,22 @@ function createCardElement(card){
     return el;
 }
 
-// Start Combat
+// Start combat button
 document.getElementById('startCombat').onclick=()=>{
     if(playerDeck.length!==3){alert('Pick 3 cards'); return;}
     setupCombat();
 }
 
-// Setup Combat Phase
+// Setup combat
 function setupCombat(){
-    playerFormation.primary=playerDeck[0];
-    playerFormation.secondary=playerDeck[1];
-    playerFormation.support=playerDeck[2];
-    playerFormation.bench=[];
-    aiFormation.primary=aiDeck[0];
-    aiFormation.secondary=aiDeck[1];
-    aiFormation.support=aiDeck[2];
-    aiFormation.bench=[];
+    playerFormation.primary=playerDeck[0]; playerFormation.secondary=playerDeck[1]; playerFormation.support=playerDeck[2]; playerFormation.bench=[];
+    aiFormation.primary=aiDeck[0]; aiFormation.secondary=aiDeck[1]; aiFormation.support=aiDeck[2]; aiFormation.bench=[];
     log("Combat begins!");
     updateBoard();
-    setTimeout(combatTurn,1000);
+    playerTurnStep=0; nextPlayerAction();
 }
 
-// Update Board
+// Update board
 function updateBoard(){
     function render(containerId, formation){
         const container=document.getElementById(containerId); container.innerHTML='';
@@ -161,63 +161,62 @@ function updateBoard(){
     render('aiSupport',aiFormation); render('aiBench',aiFormation);
 }
 
-// Show Damage/Healing
-function showDamage(card,amount){
-    const dmg=document.createElement('div'); dmg.classList.add('damagePop'); dmg.textContent=amount;
-    document.body.appendChild(dmg); setTimeout(()=>{document.body.removeChild(dmg);},800);
-}
-function showHeal(card,amount){
-    const heal=document.createElement('div'); heal.classList.add('healPop'); heal.textContent=amount;
-    document.body.appendChild(heal); setTimeout(()=>{document.body.removeChild(heal);},800);
+// Show damage/heal
+function showDamage(card,amount){ const dmg=document.createElement('div'); dmg.classList.add('damagePop'); dmg.textContent=amount; document.body.appendChild(dmg); setTimeout(()=>document.body.removeChild(dmg),800);}
+function showHeal(card,amount){ const heal=document.createElement('div'); heal.classList.add('healPop'); heal.textContent=amount; document.body.appendChild(heal); setTimeout(()=>document.body.removeChild(heal),800);}
+
+// Player turn actions
+function nextPlayerAction(){
+    const positions=['primary','secondary','support'];
+    if(playerTurnStep>=positions.length){ setTimeout(aiTurn,500); return;}
+    const pos=positions[playerTurnStep];
+    const card=playerFormation[pos];
+    const actionsDiv=document.getElementById('actions'); actionsDiv.innerHTML='';
+    if(!card || card.exhausted){ playerTurnStep++; nextPlayerAction(); return;}
+    // Buttons
+    const attackBtn=document.createElement('button'); attackBtn.textContent='Attack'; attackBtn.onclick=()=>{
+        let target=aiFormation.primary; if(aiFormation.secondary&&aiFormation.secondary.hp<target.hp) target=aiFormation.secondary; if(aiFormation.support&&aiFormation.support.hp<target.hp) target=aiFormation.support;
+        let dmg=card.atk; if(typeAdvantage[card.type]===target.type) dmg+=10; target.hp-=dmg; card.energy--; showDamage(target,dmg); log(`${card.name} attacks ${target.name} for ${dmg}`); checkDefeated(target,aiFormation); playerTurnStep++; updateBoard(); nextPlayerAction();
+    };
+    const abilityBtn=document.createElement('button'); abilityBtn.textContent='Use Ability'; abilityBtn.onclick=()=>{
+        card.active(card,Object.values(playerFormation),Object.values(aiFormation)); playerTurnStep++; updateBoard(); nextPlayerAction();
+    };
+    const passBtn=document.createElement('button'); passBtn.textContent='Pass'; passBtn.onclick=()=>{playerTurnStep++; nextPlayerAction();}
+    actionsDiv.appendChild(attackBtn); actionsDiv.appendChild(abilityBtn); actionsDiv.appendChild(passBtn);
 }
 
-// Combat Turn
-function combatTurn(){
-    if(!playerFormation.primary||!aiFormation.primary){ checkVictory(); return;}
-    playerTurn();
-    setTimeout(()=>{ if(!checkVictory()){ aiTurn(); if(!checkVictory()) setTimeout(combatTurn,1000); } },1000);
-}
-
-function playerTurn(){ turn(playerFormation,aiFormation,true); }
-function aiTurn(){ turn(aiFormation,playerFormation,false,true); }
-
-// Turn Logic
-function turn(attackerTeam,defenderTeam,isPlayer,ai=false){
+// AI turn
+function aiTurn(){
     ['primary','secondary','support'].forEach(pos=>{
-        let attacker=attackerTeam[pos];
-        if(attacker && !attacker.exhausted){
-            // AI healing logic
-            if(ai && attacker.hp<attacker.maxHp/2 && attacker.energy>=1){
-                attacker.active(attacker,Object.values(attackerTeam),Object.values(defenderTeam));
-            } else if(attacker.energy>=1 && defenderTeam.primary){
-                let defender=defenderTeam.primary;
-                if(ai){
-                    let targets=[defenderTeam.primary,defenderTeam.secondary,defenderTeam.support].filter(c=>c);
-                    defender=targets.reduce((a,b)=>a.hp<b.hp?a:b);
-                }
-                let dmg=attacker.atk;
-                if(typeAdvantage[attacker.type]===defender.type) dmg+=10;
-                if(defender.statuses.includes('Weakened')) dmg-=5;
-                defender.hp-=dmg; attacker.energy-=1;
-                showDamage(defender,dmg);
-                log(`${attacker.name} attacks ${defender.name} for ${dmg} damage.`);
-                if(defender.hp<=0){ shiftFormation(defenderTeam); log(`${defender.name} defeated!`); }
-            }
-            if(attacker.energy<=0){ attacker.exhausted=true; attacker.energy=0; log(`${attacker.name} is exhausted.`);}
-        }
+        let card=aiFormation[pos]; if(!card||card.exhausted) return;
+        // Heal if low
+        if(card.hp<card.maxHp/2 && card.energy>=1){ card.active(card,Object.values(aiFormation),Object.values(playerFormation)); }
+        else{ let target=playerFormation.primary; if(playerFormation.secondary&&playerFormation.secondary.hp<target.hp) target=playerFormation.secondary; if(playerFormation.support&&playerFormation.support.hp<target.hp) target=playerFormation.support;
+            let dmg=card.atk; if(typeAdvantage[card.type]===target.type) dmg+=10; target.hp-=dmg; card.energy--; showDamage(target,dmg); log(`${card.name} attacks ${target.name} for ${dmg}`); checkDefeated(target,playerFormation);}
+        if(card.energy<=0){ card.exhausted=true; card.energy=0; log(`${card.name} is exhausted.`);}
     });
-    Object.values(attackerTeam).forEach(c=>{ if(c && c.exhausted){ c.energy=c.maxEnergy; c.exhausted=false; log(`${c.name} regains full energy.`); }});
-    updateBoard();
+    Object.values(aiFormation).forEach(c=>{ if(c && c.exhausted){ c.energy=c.maxEnergy; c.exhausted=false; log(`${c.name} regains full energy.`);}});
+    updateBoard(); playerTurnStep=0; nextPlayerAction();
 }
 
-// Shift Formation When Plant Dies
-function shiftFormation(team){
-    team.primary=team.secondary;
-    team.secondary=team.support;
-    team.support=team.bench.shift()||null;
+// Check if card defeated
+function checkDefeated(card,formation){
+    if(card.hp<=0){
+        log(`${card.name} defeated!`);
+        shiftFormation(formation,card);
+        updateBoard();
+        checkVictory();
+    }
 }
 
-// Victory Check
+// Shift formation
+function shiftFormation(team,defeatedCard){
+    if(team.primary===defeatedCard){team.primary=team.secondary; team.secondary=team.support; team.support=team.bench.shift()||null;}
+    else if(team.secondary===defeatedCard){team.secondary=team.support; team.support=team.bench.shift()||null;}
+    else if(team.support===defeatedCard){team.support=team.bench.shift()||null;}
+}
+
+// Victory check
 function checkVictory(){
     if(!playerFormation.primary){ alert('AI Wins!'); log('AI Wins!'); return true;}
     if(!aiFormation.primary){ alert('You Win!'); log('You Win!'); return true;}
