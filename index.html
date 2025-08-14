@@ -1,1 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overgrowth Game - Fixed</title>
+<style>
+body {margin:0;font-family:sans-serif;background:#87CEEB;overflow:hidden;}
+#loadingScreen{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;flex-direction:column;background:#87CEEB;z-index:1000;}
+#flowerContainer{position:relative;width:150px;height:150px;}
+.petal{position:absolute;width:40px;height:80px;border-radius:50% 50% 50% 50%;transform-origin:bottom center;transform:scale(0) rotate(0deg); transition:transform 1s ease-out, background 1s linear;}
+#gameScreen{display:none;padding:20px;text-align:center;}
+#playerPanel, #enemyPanel{margin:10px;display:flex;justify-content:center;flex-wrap:wrap;}
+.card{display:inline-block;width:120px;height:auto;margin:10px;padding:5px;background:#fff;border:2px solid #333;border-radius:8px;position:relative;cursor:pointer;transition:transform 0.3s,border 0.3s,box-shadow 0.3s;}
+.card:hover{transform:scale(1.05); box-shadow:0 0 10px rgba(0,0,0,0.2);}
+.card.selected{border:3px solid gold; box-shadow:0 0 20px yellow;}
+.card.enemy:hover{box-shadow:0 0 20px crimson;}
+.healthBar{width:100%;height:12px;background:red;border-radius:6px;overflow:hidden;margin-top:4px;}
+.healthFill{height:100%;background:green;width:100%;transition:width 0.5s ease;}
+.cardData{font-size:12px;margin-top:4px;text-align:left;}
+#message{margin-top:20px;font-weight:bold;min-height:24px;}
+#options{margin-top:10px;}
+.optionBtn{padding:8px 12px;margin:3px;font-size:14px;cursor:pointer;transition:background 0.3s;}
+.optionBtn:hover{background:#ffd700;}
+#winScreen{display:none;text-align:center;padding:20px;}
+button{padding:10px 20px;font-size:16px;margin-top:20px;}
+@keyframes shake {0%{transform:translateX(0);}20%{transform:translateX(-5px);}40%{transform:translateX(5px);}60%{transform:translateX(-5px);}80%{transform:translateX(5px);}100%{transform:translateX(0);}}
+@keyframes glow {0%{box-shadow:0 0 0px green;}50%{box-shadow:0 0 15px green;}100%{box-shadow:0 0 0px green;}}
+@keyframes sway {0%{transform:rotate(-3deg);}50%{transform:rotate(3deg);}100%{transform:rotate(-3deg);}}
+.damage{animation:shake 0.3s;}
+.heal{animation:glow 0.5s;}
+</style>
+</head>
+<body>
+
+<div id="loadingScreen">
+  <div id="flowerContainer">
+    <div class="petal" style="background:red;"></div>
+    <div class="petal" style="background:orange;"></div>
+    <div class="petal" style="background:yellow;"></div>
+    <div class="petal" style="background:pink;"></div>
+    <div class="petal" style="background:magenta;"></div>
+  </div>
+  <p>Loading...</p>
+</div>
+
+<div id="gameScreen">
+<h1>Overgrowth</h1>
+<h3>Your Cards</h3>
+<div id="playerPanel"></div>
+<h3>Enemy Cards</h3>
+<div id="enemyPanel"></div>
+<p id="message"></p>
+<div id="options"></div>
+</div>
+
+<div id="winScreen">
+<h1 id="winMessage"></h1>
+<button onclick="restartGame()">Restart</button>
+</div>
+
+<script>
+const loadingScreen=document.getElementById('loadingScreen');
+const petals=document.querySelectorAll('.petal');
+const gameScreen=document.getElementById('gameScreen');
+const playerPanel=document.getElementById('playerPanel');
+const enemyPanel=document.getElementById('enemyPanel');
+const message=document.getElementById('message');
+const optionsDiv=document.getElementById('options');
+const winScreen=document.getElementById('winScreen');
+const winMessage=document.getElementById('winMessage');
+
+let playerCards=[],enemyCards=[];
+let selectedPlayerCard=null,selectedAction=null;
+
+function createCard(name,hp,actions){return{name,maxHp:hp,hp,actions};}
+function draftCards(deck,count){const draft=[];const copy=[...deck];for(let i=0;i<count;i++){const index=Math.floor(Math.random()*copy.length);draft.push(copy.splice(index,1)[0]);}return draft;}
+
+function initCards(){
+const playerDeck=[
+createCard('Sunflower',40,[{name:'Sunbeam',type:'attack',value:15},{name:'Grow',type:'buff',value:10}]),
+createCard('Rose',50,[{name:'Thorn Strike',type:'attack',value:20},{name:'Shield',type:'buff',value:15}]),
+createCard('Tulip',35,[{name:'Petal Slash',type:'attack',value:12},{name:'Heal',type:'buff',value:10}]),
+createCard('Daisy',30,[{name:'Quick Hit',type:'attack',value:10},{name:'Regenerate',type:'buff',value:12}])
+];
+const enemyDeck=[
+createCard('Thorn',30,[{name:'Spike',type:'attack',value:12},{name:'Harden',type:'buff',value:8}]),
+createCard('Venus Flytrap',45,[{name:'Bite',type:'attack',value:18},{name:'Absorb',type:'buff',value:10}]),
+createCard('Cactus',40,[{name:'Prickle',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
+createCard('Poison Ivy',35,[{name:'Poison',type:'attack',value:14},{name:'Toughen',type:'buff',value:8}])
+];
+playerCards=draftCards(playerDeck,3);
+enemyCards=draftCards(enemyDeck,3);
+}
+
+function renderCards(){
+playerPanel.innerHTML='';
+enemyPanel.innerHTML='';
+playerCards.forEach((card,i)=>{
+  const div=document.createElement('div');
+  div.className='card';
+  if(i===selectedPlayerCard) div.classList.add('selected');
+  if(card.flash) div.classList.add(card.flash);
+  div.innerHTML=`<strong>${card.name}</strong>
+  <div class="cardData">HP: ${card.hp}/${card.maxHp}<br>Actions:<br>${card.actions.map(a=>a.name).join(', ')}</div>
+  <div class="healthBar"><div class="healthFill" style="width:${(card.hp/card.maxHp*100)}%"></div></div>`;
+  div.onclick=()=>selectPlayerCard(i);
+  playerPanel.appendChild(div);
+});
+enemyCards.forEach((card,i)=>{
+  const div=document.createElement('div');
+  div.className='card enemy';
+  if(card.flash) div.classList.add(card.flash);
+  div.innerHTML=`<strong>${card.name}</strong>
+  <div class="cardData">HP: ${card.hp}/${card.maxHp}<br>Actions:<br>${card.actions.map(a=>a.name).join(', ')}</div>
+  <div class="healthBar"><div class="healthFill" style="width:${(card.hp/card.maxHp*100)}%"></div></div>`;
+  div.onclick=()=>{ 
+    if(selectedAction && selectedAction.type==='attack' && selectedPlayerCard!==null) {
+      performAction(selectedPlayerCard,selectedAction,i);
+    }
+  };
+  enemyPanel.appendChild(div);
+});
+playerCards.forEach(card=>{if(card.flash) setTimeout(()=>{delete card.flash; renderCards();},300);});
+enemyCards.forEach(card=>{if(card.flash) setTimeout(()=>{delete card.flash; renderCards();},300);});
+}
+
+function selectPlayerCard(index){
+selectedPlayerCard=index; selectedAction=null; optionsDiv.innerHTML='';
+const card=playerCards[index];
+card.actions.forEach(act=>{
+  const btn=document.createElement('button'); btn.className='optionBtn'; btn.textContent=act.name;
+  btn.onclick=()=>{selectedAction=act; 
+  if(act.type==='buff'){
+    card.hp+=act.value; if(card.hp>card.maxHp) card.hp=card.maxHp;
+    card.flash='heal';
+    message.textContent=`${card.name} used ${act.name} and healed ${act.value}!`;
+    optionsDiv.innerHTML=''; renderCards();
+    setTimeout(enemyTurn,700);
+  } else{message.textContent='Select an enemy card to attack.';}};
+  optionsDiv.appendChild(btn);
+});
+renderCards();
+}
+
+function performAction(playerIndex,action,enemyIndex){
+const player=playerCards[playerIndex];
+const target=enemyCards[enemyIndex];
+target.hp-=action.value;
+target.flash='damage';
+message.textContent=`${player.name} used ${action.name} on ${target.name} for ${action.value}!`;
+if(target.hp<=0) enemyCards.splice(enemyIndex,1);
+selectedPlayerCard=null; selectedAction=null; optionsDiv.innerHTML='';
+renderCards();
+if(enemyCards.length===0) return endGame('You Win!');
+setTimeout(enemyTurn,700);
+}
+
+function enemyTurn(){
+if(playerCards.length===0) return;
+const card=enemyCards[Math.floor(Math.random()*enemyCards.length)];
+const action=card.actions[Math.floor(Math.random()*card.actions.length)];
+if(action.type==='attack'){
+const target=playerCards[Math.floor(Math.random()*playerCards.length)];
+target.hp-=action.value; target.flash='damage';
+message.textContent=`Enemy ${card.name} used ${action.name} on ${target.name} for ${action.value}!`;
+if(target.hp<=0) playerCards=playerCards.filter(c=>c!==target);
+} else{
+card.hp+=action.value; if(card.hp>card.maxHp) card.hp=card.maxHp; card.flash='heal';
+message.textContent=`Enemy ${card.name} used ${action.name} and healed ${action.value}!`;
+}
+renderCards();
+if(playerCards.length===0) return endGame('You Lose!');
+}
+
+function endGame(result){gameScreen.style.display='none'; winScreen.style.display='block'; winMessage.textContent=result;}
+function restartGame(){initCards();winScreen.style.display='none';gameScreen.style.display='block';message.textContent='';optionsDiv.innerHTML='';renderCards();}
+
+// Flower Bloom + Sway + Color Cycle
+function bloomFlower(){
+  const colors=['red','orange','yellow','pink','magenta','purple','lightblue'];
+  petals.forEach((petal,i)=>{
+    const angle=(i*(360/petals.length))-90;
+    setTimeout(()=>{
+      petal.style.transform=`scale(1) rotate(${angle}deg)`;
+      let colorIndex=0;
+      setInterval(()=>{
+        petal.style.background=colors[colorIndex];
+        colorIndex=(colorIndex+1)%colors.length;
+      },400);
+      petal.style.animation=`sway ${2+i*0.3}s infinite ease-in-out`;
+    }, i*300);
+  });
+}
+
+window.addEventListener('load',()=>{
+  bloomFlower();
+  setTimeout(()=>{
+    loadingScreen.style.display='none';
+    gameScreen.style.display='block';
+    renderCards();
+  },3000);
+});
+
+initCards();
+</script>
+</body>
+</html>
 
