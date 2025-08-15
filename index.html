@@ -358,23 +358,53 @@ selectedAction=null;
 renderCards();
 setTimeout(enemyTurn,500);
 }
+function enemyTurn() {
+  if (playerCards.length === 0) return;
 
-function enemyTurn(){
-const aliveEnemies=enemyCards.filter(c=>c.hp>0);
-const alivePlayers=playerCards.filter(c=>c.hp>0);
-if(aliveEnemies.length===0 || alivePlayers.length===0) return;
-const enemy=aliveEnemies[Math.floor(Math.random()*aliveEnemies.length)];
-const action=enemy.actions[Math.floor(Math.random()*enemy.actions.length)];
-if(action.type==='attack'){
-const target=alivePlayers[Math.floor(Math.random()*alivePlayers.length)];
-target.hp-=action.value; if(target.hp<0) target.hp=0;
-message.textContent=`Enemy ${enemy.name} used ${action.name}!`; playAttack();
-} else if(action.type==='buff'){
-enemy.hp+=action.value; if(enemy.hp>enemy.maxHp) enemy.hp=enemy.maxHp;
-message.textContent=`Enemy ${enemy.name} used ${action.name}!`; playHeal();
+  // Pick a random enemy card to act
+  const card = enemyCards[Math.floor(Math.random() * enemyCards.length)];
+
+  let action;
+  let target;
+
+  // ---- STRATEGIC DECISION ----
+  const healActions = card.actions.filter(a => a.type === 'buff');
+  const attackActions = card.actions.filter(a => a.type === 'attack');
+
+  // If HP < 40% and healing is available → heal
+  if (card.hp < card.maxHp * 0.4 && healActions.length > 0) {
+    action = healActions[Math.floor(Math.random() * healActions.length)];
+    card.hp += action.value;
+    if (card.hp > card.maxHp) card.hp = card.maxHp;
+    message.textContent = `Enemy ${card.name} used ${action.name} and healed ${action.value}!`;
+    playHeal();
+  }
+  else if (attackActions.length > 0) {
+    // Pick attack action
+    action = attackActions[Math.floor(Math.random() * attackActions.length)];
+    // Target the weakest player card (lowest HP)
+    target = playerCards.reduce((weakest, c) => c.hp < weakest.hp ? c : weakest, playerCards[0]);
+    target.hp -= action.value;
+    message.textContent = `Enemy ${card.name} used ${action.name} on ${target.name} for ${action.value}!`;
+    playAttack();
+    if (target.hp <= 0) playerCards = playerCards.filter(c => c !== target);
+  }
+  else {
+    // Fallback: random action if somehow no attack/buff logic applied
+    action = card.actions[Math.floor(Math.random() * card.actions.length)];
+    if (action.type === 'buff') {
+      card.hp += action.value;
+      if (card.hp > card.maxHp) card.hp = card.maxHp;
+      message.textContent = `Enemy ${card.name} used ${action.name} and healed ${action.value}!`;
+      playHeal();
+    }
+  }
+
+  // Re-render cards and check win/loss
+  renderCards();
+  if (playerCards.length === 0) return endGame('You Lose!');
 }
-renderCards();
-}
+
 
 function checkWinLose(){
 const allEnemyDead=enemyCards.every(c=>c.hp<=0);
@@ -410,3 +440,4 @@ playBtn.onclick=()=>{
 
 </body>
 </html>
+
