@@ -24,14 +24,17 @@ body {margin:0;font-family:sans-serif;background:#87CEEB;overflow:hidden;positio
 #loadingBar{width:0%; height:100%; background:gold; transition:width 0.2s ease;}
 #loadingText{margin-top:10px; font-weight:bold;}
 
-/* Main Menu */
-#mainMenu{
-  display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+/* Login / Sign Up */
+#loginMenu, #mainMenu{display:none; position:fixed; top:0; left:0; width:100%; height:100%;
   background:#87CEEB; z-index:900; display:flex; flex-direction:column;
   justify-content:center; align-items:center;
 }
-#mainMenu h1{font-size:48px; margin-bottom:40px;}
-#mainMenu button{padding:15px 30px; font-size:24px; margin:10px; cursor:pointer;}
+#loginMenu input{margin:5px; padding:10px; font-size:16px;}
+#loginMenu label{margin-top:10px;}
+#loginMenu button{padding:10px 20px; font-size:16px; margin-top:10px; cursor:pointer;}
+#loginError{color:red; font-weight:bold; margin-top:10px;}
+
+/* Tips */
 #tipsBtn{
   position:absolute; bottom:20px; left:20px; font-size:32px; cursor:pointer;
   background:#fff; border:2px solid #333; border-radius:50%; width:50px; height:50px; display:flex;
@@ -65,7 +68,7 @@ button{padding:10px 20px; font-size:16px; margin-top:20px;}
   padding:8px 12px; cursor:pointer; background:#fff; border:2px solid #333; border-radius:6px;
 }
 #settingsPanel{
-  position:absolute; top:50px; right:10px; width:220px; background:#fff; border:2px solid #333; border-radius:8px; padding:10px;
+  position:absolute; top:50px; right:10px; width:180px; background:#fff; border:2px solid #333; border-radius:8px; padding:10px;
   display:none; z-index:101;
 }
 #settingsPanel label{display:block; margin:8px 0; cursor:pointer;}
@@ -83,6 +86,16 @@ button{padding:10px 20px; font-size:16px; margin-top:20px;}
     <div id="loadingBar"></div>
   </div>
   <p id="loadingText">Loading 0%</p>
+</div>
+
+<!-- Login Menu -->
+<div id="loginMenu">
+  <h1>Overgrowth</h1>
+  <input type="text" id="username" placeholder="Username">
+  <input type="password" id="password" placeholder="Password">
+  <label><input type="checkbox" id="rememberMe"> Remember Me</label>
+  <button id="loginBtn">Login / Play</button>
+  <p id="loginError"></p>
 </div>
 
 <!-- Main Menu -->
@@ -104,23 +117,9 @@ button{padding:10px 20px; font-size:16px; margin-top:20px;}
 <!-- Game Screen -->
 <div id="gameScreen">
   <button id="settingsBtn">Settings ⚙️</button>
-  
-  <!-- Settings Panel (Updated with Sign-In) -->
   <div id="settingsPanel">
-    <h3>Settings</h3>
     <label><input type="checkbox" id="muteMusic"> Mute Music</label>
     <label><input type="checkbox" id="muteSFX"> Mute Sound Effects</label>
-
-    <hr>
-    <h3 id="authTitle">Sign In</h3>
-    <input type="text" id="usernameInput" placeholder="Username" style="width:100%;margin-bottom:5px;">
-    <input type="password" id="passwordInput" placeholder="Password" style="width:100%;margin-bottom:5px;">
-    <label><input type="checkbox" id="rememberMe"> Remember Me</label><br>
-    <button id="authBtn">Sign In</button>
-    <button id="toggleAuthBtn" style="margin-top:5px;">Create Account</button>
-    <p id="authMessage" style="color:red; font-size:12px;"></p>
-
-    <hr>
     <button onclick="closeSettings()">Close</button>
   </div>
 
@@ -143,7 +142,7 @@ button{padding:10px 20px; font-size:16px; margin-top:20px;}
 const loadingBar=document.getElementById('loadingBar');
 const loadingText=document.getElementById('loadingText');
 const loadingScreen=document.getElementById('loadingScreen');
-const mainMenu=document.getElementById('mainMenu');
+const loginMenu=document.getElementById('loginMenu');
 
 let loadPercent=0;
 const loadInterval=setInterval(()=>{
@@ -154,7 +153,8 @@ const loadInterval=setInterval(()=>{
     clearInterval(loadInterval);
     setTimeout(()=>{
       loadingScreen.style.display='none';
-      mainMenu.style.display='flex';
+      loginMenu.style.display='flex';
+      checkRememberMe();
     },500);
   }
 },30);
@@ -204,6 +204,40 @@ function playBackgroundMusic(){
 
 function stopBackgroundMusic(){ if(bgInterval) clearInterval(bgInterval); }
 
+// ---------------- Login ----------------
+const loginBtn=document.getElementById('loginBtn');
+loginBtn.onclick=()=>{
+  const username=document.getElementById('username').value;
+  const password=document.getElementById('password').value;
+  const rememberMe=document.getElementById('rememberMe').checked;
+
+  if(username && password){
+    // Save login if Remember Me
+    if(rememberMe){
+      localStorage.setItem('ogUsername',username);
+      localStorage.setItem('ogPassword',password);
+    } else {
+      localStorage.removeItem('ogUsername');
+      localStorage.removeItem('ogPassword');
+    }
+    loginMenu.style.display='none';
+    gameScreen.style.display='block';
+    startGame();
+  } else {
+    document.getElementById('loginError').textContent='Enter username and password!';
+  }
+};
+
+function checkRememberMe(){
+  const savedUser=localStorage.getItem('ogUsername');
+  const savedPass=localStorage.getItem('ogPassword');
+  if(savedUser && savedPass){
+    document.getElementById('username').value=savedUser;
+    document.getElementById('password').value=savedPass;
+    document.getElementById('rememberMe').checked=true;
+  }
+}
+
 // ---------------- Game Data ----------------
 let playerCards=[],enemyCards=[];
 let selectedPlayerCard=null,selectedAction=null;
@@ -219,36 +253,46 @@ function draftCards(deck,count){
 
 function startGame(){initCards(); renderCards();}
 
-// Expanded Card Pool
+// Expanded Card Pool (20+)
 function initCards(){
-const playerDeck=[
-createCard('Sunflower',40,[{name:'Sunbeam',type:'attack',value:15},{name:'Grow',type:'buff',value:10}]),
-createCard('Rose',50,[{name:'Thorn Strike',type:'attack',value:20},{name:'Shield',type:'buff',value:15}]),
-createCard('Tulip',35,[{name:'Petal Slash',type:'attack',value:12},{name:'Heal',type:'buff',value:10}]),
-createCard('Daisy',30,[{name:'Quick Hit',type:'attack',value:10},{name:'Regenerate',type:'buff',value:12}]),
-createCard('Orchid',45,[{name:'Poison Bloom',type:'attack',value:18},{name:'Camouflage',type:'buff',value:12}]),
-createCard('Lily',38,[{name:'Water Splash',type:'attack',value:14},{name:'Revitalize',type:'buff',value:15}]),
-createCard('Marigold',32,[{name:'Solar Beam',type:'attack',value:16},{name:'Harden',type:'buff',value:10}]),
-createCard('Poppy',28,[{name:'Sleep Dust',type:'attack',value:12},{name:'Shield',type:'buff',value:8}]),
-createCard('Iris',36,[{name:'Petal Storm',type:'attack',value:18},{name:'Focus',type:'buff',value:12}]),
-createCard('Carnation',33,[{name:'Thorn Whip',type:'attack',value:15},{name:'Regrow',type:'buff',value:10}])
-];
+  const playerDeck=[
+    createCard('Sunflower',40,[{name:'Sunbeam',type:'attack',value:15},{name:'Grow',type:'buff',value:10}]),
+    createCard('Rose',50,[{name:'Thorn Strike',type:'attack',value:20},{name:'Shield',type:'buff',value:15}]),
+    createCard('Tulip',35,[{name:'Petal Slash',type:'attack',value:12},{name:'Heal',type:'buff',value:10}]),
+    createCard('Daisy',30,[{name:'Quick Hit',type:'attack',value:10},{name:'Regenerate',type:'buff',value:12}]),
+    createCard('Orchid',45,[{name:'Poison Bloom',type:'attack',value:18},{name:'Camouflage',type:'buff',value:12}]),
+    createCard('Lily',38,[{name:'Water Splash',type:'attack',value:14},{name:'Revitalize',type:'buff',value:15}]),
+    createCard('Marigold',32,[{name:'Solar Beam',type:'attack',value:16},{name:'Harden',type:'buff',value:10}]),
+    createCard('Poppy',28,[{name:'Sleep Dust',type:'attack',value:12},{name:'Shield',type:'buff',value:8}]),
+    createCard('Iris',36,[{name:'Petal Storm',type:'attack',value:18},{name:'Focus',type:'buff',value:12}]),
+    createCard('Carnation',33,[{name:'Thorn Whip',type:'attack',value:15},{name:'Regrow',type:'buff',value:10}]),
+    createCard('Bluebell',34,[{name:'Bell Strike',type:'attack',value:14},{name:'Soothing',type:'buff',value:12}]),
+    createCard('Hibiscus',40,[{name:'Fire Petal',type:'attack',value:20},{name:'Fortify',type:'buff',value:10}]),
+    createCard('Dandelion',30,[{name:'Blow Seeds',type:'attack',value:12},{name:'Refresh',type:'buff',value:15}]),
+    createCard('Lotus',42,[{name:'Lotus Blast',type:'attack',value:18},{name:'Calm',type:'buff',value:12}]),
+    createCard('Violet',35,[{name:'Violet Sting',type:'attack',value:16},{name:'Focus',type:'buff',value:10}])
+  ];
 
-const enemyDeck=[
-createCard('Thorn',30,[{name:'Spike',type:'attack',value:12},{name:'Harden',type:'buff',value:8}]),
-createCard('Venus Flytrap',45,[{name:'Bite',type:'attack',value:18},{name:'Absorb',type:'buff',value:10}]),
-createCard('Cactus',40,[{name:'Prickle',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
-createCard('Poison Ivy',35,[{name:'Poison',type:'attack',value:14},{name:'Toughen',type:'buff',value:8}]),
-createCard('Bramble',38,[{name:'Entangle',type:'attack',value:16},{name:'Resist',type:'buff',value:10}]),
-createCard('Snapdragon',34,[{name:'Fire Breath',type:'attack',value:18},{name:'Shield',type:'buff',value:12}]),
-createCard('Weeping Willow',50,[{name:'Root Grab',type:'attack',value:20},{name:'Regrow',type:'buff',value:15}]),
-createCard('Nightshade',40,[{name:'Shadow Strike',type:'attack',value:17},{name:'Camouflage',type:'buff',value:10}]),
-createCard('Bamboo',36,[{name:'Rapid Slash',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
-createCard('Creeper Vine',32,[{name:'Wrap',type:'attack',value:14},{name:'Harden',type:'buff',value:8}])
-];
+  const enemyDeck=[
+    createCard('Thorn',30,[{name:'Spike',type:'attack',value:12},{name:'Harden',type:'buff',value:8}]),
+    createCard('Venus Flytrap',45,[{name:'Bite',type:'attack',value:18},{name:'Absorb',type:'buff',value:10}]),
+    createCard('Cactus',40,[{name:'Prickle',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
+    createCard('Poison Ivy',35,[{name:'Poison',type:'attack',value:14},{name:'Toughen',type:'buff',value:8}]),
+    createCard('Bramble',38,[{name:'Entangle',type:'attack',value:16},{name:'Resist',type:'buff',value:10}]),
+    createCard('Snapdragon',34,[{name:'Fire Breath',type:'attack',value:18},{name:'Shield',type:'buff',value:12}]),
+    createCard('Weeping Willow',50,[{name:'Root Grab',type:'attack',value:20},{name:'Regrow',type:'buff',value:15}]),
+    createCard('Nightshade',40,[{name:'Shadow Strike',type:'attack',value:17},{name:'Camouflage',type:'buff',value:10}]),
+    createCard('Bamboo',36,[{name:'Rapid Slash',type:'attack',value:15},{name:'Fortify',type:'buff',value:12}]),
+    createCard('Creeper Vine',32,[{name:'Wrap',type:'attack',value:14},{name:'Harden',type:'buff',value:8}]),
+    createCard('Thistle',33,[{name:'Prickly Attack',type:'attack',value:16},{name:'Resist',type:'buff',value:10}]),
+    createCard('Mandrake',38,[{name:'Scream',type:'attack',value:18},{name:'Regrow',type:'buff',value:12}]),
+    createCard('Elderberry',35,[{name:'Berry Strike',type:'attack',value:15},{name:'Shield',type:'buff',value:12}]),
+    createCard('Poison Oak',40,[{name:'Toxic Lash',type:'attack',value:18},{name:'Camouflage',type:'buff',value:10}]),
+    createCard('Willowisp',36,[{name:'Spirit Strike',type:'attack',value:17},{name:'Hasten',type:'buff',value:12}])
+  ];
 
-playerCards=draftCards(playerDeck,3);
-enemyCards=draftCards(enemyDeck,3);
+  playerCards=draftCards(playerDeck,3);
+  enemyCards=draftCards(enemyDeck,3);
 }
 
 // ---------------- Rendering & Gameplay ----------------
@@ -256,6 +300,9 @@ const playerPanel=document.getElementById('playerPanel');
 const enemyPanel=document.getElementById('enemyPanel');
 const message=document.getElementById('message');
 const optionsDiv=document.getElementById('options');
+const gameScreen=document.getElementById('gameScreen');
+const winScreen=document.getElementById('winScreen');
+const winMessage=document.getElementById('winMessage');
 
 function renderCards(){
 playerPanel.innerHTML=''; enemyPanel.innerHTML='';
@@ -275,188 +322,91 @@ enemyCards.forEach((card,i)=>{
   <div class="cardData">HP: ${card.hp}/${card.maxHp}<br>Actions:<br>${card.actions.map(a=>a.name).join(', ')}</div>
   <div class="healthBar"><div class="healthFill" style="width:${(card.hp/card.maxHp*100)}%"></div></div>`;
   div.onclick=()=>{ 
-    if(selectedAction && selectedAction.type==='attack' && selectedPlayerCard!==null) {
-      performAction(selectedPlayerCard,selectedAction,i);
+    if(selectedAction && selectedAction.type==='attack' && selectedPlayerCard!==null){ 
+      performAction(selectedPlayerCard,i,selectedAction);
     }
   };
   enemyPanel.appendChild(div);
 });
+renderOptions();
+checkWinLose();
 }
 
-function selectPlayerCard(index){
-selectedPlayerCard=index; selectedAction=null; optionsDiv.innerHTML='';
-const card=playerCards[index];
-card.actions.forEach(act=>{
-  const btn=document.createElement('button'); btn.className='optionBtn'; btn.textContent=act.name;
-  btn.onclick=()=>{
-    selectedAction=act; 
-    if(act.type==='buff'){
-      card.hp+=act.value; if(card.hp>card.maxHp) card.hp=card.maxHp;
-      message.textContent=`${card.name} used ${act.name} and healed ${act.value}!`;
-      playHeal(); // Play heal sound
-      optionsDiv.innerHTML=''; renderCards();
-      setTimeout(enemyTurn,700);
-    } else{
-      message.textContent='Select an enemy card to attack.';
-    }
-  };
-  optionsDiv.appendChild(btn);
-});
-renderCards();
+function selectPlayerCard(i){selectedPlayerCard=i;selectedAction=null;renderCards();}
+
+function renderOptions(){
+optionsDiv.innerHTML='';
+if(selectedPlayerCard!==null){
+  playerCards[selectedPlayerCard].actions.forEach(action=>{
+    const btn=document.createElement('button'); btn.className='optionBtn';
+    btn.textContent=action.name;
+    btn.onclick=()=>{selectedAction=action; message.textContent=`Selected ${action.name}`; playCardSelect();};
+    optionsDiv.appendChild(btn);
+  });
+}
 }
 
-function performAction(playerIndex,action,enemyIndex){
+function performAction(playerIndex,enemyIndex,action){
 const player=playerCards[playerIndex];
-const target=enemyCards[enemyIndex];
-target.hp-=action.value;
-message.textContent=`${player.name} used ${action.name} on ${target.name} for ${action.value}!`;
-playAttack();
-if(target.hp<=0) enemyCards.splice(enemyIndex,1);
-selectedPlayerCard=null; selectedAction=null; optionsDiv.innerHTML='';
+const enemy=enemyCards[enemyIndex];
+if(action.type==='attack'){
+enemy.hp-=action.value; if(enemy.hp<0) enemy.hp=0; message.textContent=`${player.name} used ${action.name}!`; playAttack();
+} else if(action.type==='buff'){
+player.hp+=action.value; if(player.hp>player.maxHp) player.hp=player.maxHp; message.textContent=`${player.name} used ${action.name}!`; playHeal();
+}
+selectedAction=null;
 renderCards();
-if(enemyCards.length===0) return endGame('You Win!');
-setTimeout(enemyTurn,700);
+setTimeout(enemyTurn,500);
 }
 
-function enemyTurn() {
-  if (playerCards.length === 0) return;
-
-  // Pick a random enemy card to act
-  const card = enemyCards[Math.floor(Math.random() * enemyCards.length)];
-
-  let action;
-  let target;
-
-  // ---- STRATEGIC DECISION ----
-  const healActions = card.actions.filter(a => a.type === 'buff');
-  const attackActions = card.actions.filter(a => a.type === 'attack');
-
-  if (card.hp < card.maxHp * 0.4 && healActions.length > 0) {
-    action = healActions[Math.floor(Math.random() * healActions.length)];
-    card.hp += action.value;
-    if (card.hp > card.maxHp) card.hp = card.maxHp;
-    message.textContent = `Enemy ${card.name} used ${action.name} and healed ${action.value}!`;
-    playHeal();
-  }
-  else if (attackActions.length > 0) {
-    action = attackActions[Math.floor(Math.random() * attackActions.length)];
-    target = playerCards.reduce((weakest, c) => c.hp < weakest.hp ? c : weakest, playerCards[0]);
-    target.hp -= action.value;
-    message.textContent = `Enemy ${card.name} used ${action.name} on ${target.name} for ${action.value}!`;
-    playAttack();
-    if (target.hp <= 0) playerCards = playerCards.filter(c => c !== target);
-  }
-  else {
-    action = card.actions[Math.floor(Math.random() * card.actions.length)];
-    if (action.type === 'buff') {
-      card.hp += action.value;
-      if (card.hp > card.maxHp) card.hp = card.maxHp;
-      message.textContent = `Enemy ${card.name} used ${action.name} and healed ${action.value}!`;
-      playHeal();
-    }
-  }
-
-  renderCards();
-  if(playerCards.length===0) endGame('You Lose!');
+function enemyTurn(){
+const aliveEnemies=enemyCards.filter(c=>c.hp>0);
+const alivePlayers=playerCards.filter(c=>c.hp>0);
+if(aliveEnemies.length===0 || alivePlayers.length===0) return;
+const enemy=aliveEnemies[Math.floor(Math.random()*aliveEnemies.length)];
+const action=enemy.actions[Math.floor(Math.random()*enemy.actions.length)];
+if(action.type==='attack'){
+const target=alivePlayers[Math.floor(Math.random()*alivePlayers.length)];
+target.hp-=action.value; if(target.hp<0) target.hp=0;
+message.textContent=`Enemy ${enemy.name} used ${action.name}!`; playAttack();
+} else if(action.type==='buff'){
+enemy.hp+=action.value; if(enemy.hp>enemy.maxHp) enemy.hp=enemy.maxHp;
+message.textContent=`Enemy ${enemy.name} used ${action.name}!`; playHeal();
+}
+renderCards();
 }
 
-// ---------------- Win / Restart ----------------
-const winScreen=document.getElementById('winScreen');
-const winMessage=document.getElementById('winMessage');
-function endGame(msg){winMessage.textContent=msg;winScreen.style.display='block';playWin();}
-function restartGame(){winScreen.style.display='none';startGame();message.textContent='';}
+function checkWinLose(){
+const allEnemyDead=enemyCards.every(c=>c.hp<=0);
+const allPlayerDead=playerCards.every(c=>c.hp<=0);
+if(allEnemyDead){ winScreen.style.display='block'; gameScreen.style.display='none'; winMessage.textContent='You Win!'; playWin();}
+if(allPlayerDead){ winScreen.style.display='block'; gameScreen.style.display='none'; winMessage.textContent='You Lose!'; playLose();}
+}
 
-// ---------------- Settings ----------------
-const settingsBtn=document.getElementById('settingsBtn');
-const settingsPanel=document.getElementById('settingsPanel');
-const muteMusicCheckbox=document.getElementById('muteMusic');
-const muteSFXCheckbox=document.getElementById('muteSFX');
-
-settingsBtn.onclick=()=>{settingsPanel.style.display=(settingsPanel.style.display==='none'?'block':'none');}
-function closeSettings(){settingsPanel.style.display='none';}
-
-muteMusicCheckbox.onchange=(e)=>{musicMuted=e.target.checked; if(musicMuted) stopBackgroundMusic(); else playBackgroundMusic();}
-muteSFXCheckbox.onchange=(e)=>{sfxMuted=e.target.checked;}
+function restartGame(){winScreen.style.display='none'; startGame(); gameScreen.style.display='block'; message.textContent='';}
 
 // ---------------- Tips ----------------
 const tipsBtn=document.getElementById('tipsBtn');
 const tipsPanel=document.getElementById('tipsPanel');
-tipsBtn.onclick=()=>{tipsPanel.style.display=(tipsPanel.style.display==='none'?'block':'none');}
+tipsBtn.onclick=()=>tipsPanel.style.display=(tipsPanel.style.display==='none')?'block':'none';
 
-// ---------------- Sign-In / Create Account ----------------
-let authMode='signin'; // 'signin' or 'create'
+// ---------------- Settings ----------------
+const settingsBtn=document.getElementById('settingsBtn');
+const settingsPanel=document.getElementById('settingsPanel');
+settingsBtn.onclick=()=>settingsPanel.style.display=(settingsPanel.style.display==='none')?'block':'none';
+function closeSettings(){settingsPanel.style.display='none';}
+document.getElementById('muteMusic').onchange=function(){musicMuted=this.checked; if(!musicMuted) playBackgroundMusic(); else stopBackgroundMusic();}
+document.getElementById('muteSFX').onchange=function(){sfxMuted=this.checked;}
 
-const usernameInput=document.getElementById('usernameInput');
-const passwordInput=document.getElementById('passwordInput');
-const authBtn=document.getElementById('authBtn');
-const toggleAuthBtn=document.getElementById('toggleAuthBtn');
-const authTitle=document.getElementById('authTitle');
-const authMessage=document.getElementById('authMessage');
-const rememberMeCheckbox=document.getElementById('rememberMe');
-
-// Load saved credentials
-window.addEventListener('load',()=>{
-  const savedUser=localStorage.getItem('savedUsername');
-  const savedPass=localStorage.getItem('savedPassword');
-  if(savedUser && savedPass){
-    usernameInput.value=savedUser;
-    passwordInput.value=savedPass;
-    rememberMeCheckbox.checked=true;
-  }
-});
-
-// Toggle mode
-toggleAuthBtn.onclick=()=>{
-  if(authMode==='signin'){
-    authMode='create';
-    authTitle.textContent='Create Account';
-    authBtn.textContent='Create Account';
-    toggleAuthBtn.textContent='Already have an account? Sign In';
-    authMessage.textContent='';
-  } else{
-    authMode='signin';
-    authTitle.textContent='Sign In';
-    authBtn.textContent='Sign In';
-    toggleAuthBtn.textContent='Create Account';
-    authMessage.textContent='';
-  }
-};
-
-// Handle auth
-authBtn.onclick=()=>{
-  const username=usernameInput.value.trim();
-  const password=passwordInput.value.trim();
-  if(!username || !password){authMessage.textContent='Enter both username and password.'; return;}
-  let accounts=JSON.parse(localStorage.getItem('accounts')||'{}');
-  if(authMode==='create'){
-    if(accounts[username]){authMessage.textContent='Username already exists.'; return;}
-    accounts[username]=password;
-    localStorage.setItem('accounts',JSON.stringify(accounts));
-    authMessage.style.color='green';
-    authMessage.textContent='Account created! You can sign in now.';
-    usernameInput.value=''; passwordInput.value='';
-    authMode='signin'; authTitle.textContent='Sign In'; authBtn.textContent='Sign In'; toggleAuthBtn.textContent='Create Account';
-  } else{
-    if(accounts[username]!==password){authMessage.style.color='red'; authMessage.textContent='Invalid username or password.'; return;}
-    authMessage.style.color='green'; authMessage.textContent='Signed in successfully!';
-    if(rememberMeCheckbox.checked){
-      localStorage.setItem('savedUsername',username);
-      localStorage.setItem('savedPassword',password);
-    } else{
-      localStorage.removeItem('savedUsername');
-      localStorage.removeItem('savedPassword');
-    }
-    setTimeout(()=>{closeSettings(); startGame(); mainMenu.style.display='none'; document.getElementById('gameScreen').style.display='block'; playBackgroundMusic();},500);
-  }
-};
-
-// ---------------- Main Menu Play Button ----------------
-document.getElementById('playBtn').onclick=()=>{
-  // Open settings to require sign-in before playing
-  settingsPanel.style.display='block';
-  authMessage.style.color='red';
-  authMessage.textContent='Please sign in to play.';
+// ---------------- Play Button ----------------
+const playBtn=document.getElementById('playBtn');
+playBtn.onclick=()=>{
+  mainMenu.style.display='none';
+  gameScreen.style.display='block';
+  startGame();
+  playBackgroundMusic();
 };
 </script>
+
 </body>
 </html>
