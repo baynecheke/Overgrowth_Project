@@ -65,7 +65,7 @@ button{padding:10px 20px; font-size:16px; margin-top:20px;}
   padding:8px 12px; cursor:pointer; background:#fff; border:2px solid #333; border-radius:6px;
 }
 #settingsPanel{
-  position:absolute; top:50px; right:10px; width:180px; background:#fff; border:2px solid #333; border-radius:8px; padding:10px;
+  position:absolute; top:50px; right:10px; width:220px; background:#fff; border:2px solid #333; border-radius:8px; padding:10px;
   display:none; z-index:101;
 }
 #settingsPanel label{display:block; margin:8px 0; cursor:pointer;}
@@ -104,9 +104,23 @@ button{padding:10px 20px; font-size:16px; margin-top:20px;}
 <!-- Game Screen -->
 <div id="gameScreen">
   <button id="settingsBtn">Settings ⚙️</button>
+  
+  <!-- Settings Panel (Updated with Sign-In) -->
   <div id="settingsPanel">
+    <h3>Settings</h3>
     <label><input type="checkbox" id="muteMusic"> Mute Music</label>
     <label><input type="checkbox" id="muteSFX"> Mute Sound Effects</label>
+
+    <hr>
+    <h3 id="authTitle">Sign In</h3>
+    <input type="text" id="usernameInput" placeholder="Username" style="width:100%;margin-bottom:5px;">
+    <input type="password" id="passwordInput" placeholder="Password" style="width:100%;margin-bottom:5px;">
+    <label><input type="checkbox" id="rememberMe"> Remember Me</label><br>
+    <button id="authBtn">Sign In</button>
+    <button id="toggleAuthBtn" style="margin-top:5px;">Create Account</button>
+    <p id="authMessage" style="color:red; font-size:12px;"></p>
+
+    <hr>
     <button onclick="closeSettings()">Close</button>
   </div>
 
@@ -317,7 +331,6 @@ function enemyTurn() {
   const healActions = card.actions.filter(a => a.type === 'buff');
   const attackActions = card.actions.filter(a => a.type === 'attack');
 
-  // If HP < 40% and healing is available → heal
   if (card.hp < card.maxHp * 0.4 && healActions.length > 0) {
     action = healActions[Math.floor(Math.random() * healActions.length)];
     card.hp += action.value;
@@ -326,9 +339,7 @@ function enemyTurn() {
     playHeal();
   }
   else if (attackActions.length > 0) {
-    // Pick attack action
     action = attackActions[Math.floor(Math.random() * attackActions.length)];
-    // Target the weakest player card (lowest HP)
     target = playerCards.reduce((weakest, c) => c.hp < weakest.hp ? c : weakest, playerCards[0]);
     target.hp -= action.value;
     message.textContent = `Enemy ${card.name} used ${action.name} on ${target.name} for ${action.value}!`;
@@ -336,7 +347,6 @@ function enemyTurn() {
     if (target.hp <= 0) playerCards = playerCards.filter(c => c !== target);
   }
   else {
-    // Fallback: random action if somehow no attack/buff logic applied
     action = card.actions[Math.floor(Math.random() * card.actions.length)];
     if (action.type === 'buff') {
       card.hp += action.value;
@@ -346,56 +356,107 @@ function enemyTurn() {
     }
   }
 
-  // Re-render cards and check win/loss
   renderCards();
-  if (playerCards.length === 0) return endGame('You Lose!');
+  if(playerCards.length===0) endGame('You Lose!');
 }
 
-// ---------------- End & Restart ----------------
+// ---------------- Win / Restart ----------------
 const winScreen=document.getElementById('winScreen');
 const winMessage=document.getElementById('winMessage');
-function endGame(result){
-  gameScreen.style.display='none'; 
-  winScreen.style.display='block'; 
-  winMessage.textContent=result;
-  if(result.includes('Win')) playWin(); else playLose();
-}
-function restartGame(){
-  initCards();winScreen.style.display='none';gameScreen.style.display='block';message.textContent='';optionsDiv.innerHTML='';renderCards();
-}
+function endGame(msg){winMessage.textContent=msg;winScreen.style.display='block';playWin();}
+function restartGame(){winScreen.style.display='none';startGame();message.textContent='';}
 
-// ---------------- Settings Panel ----------------
+// ---------------- Settings ----------------
 const settingsBtn=document.getElementById('settingsBtn');
 const settingsPanel=document.getElementById('settingsPanel');
-settingsBtn.onclick=()=>{settingsPanel.style.display=settingsPanel.style.display==='block'?'none':'block';};
+const muteMusicCheckbox=document.getElementById('muteMusic');
+const muteSFXCheckbox=document.getElementById('muteSFX');
+
+settingsBtn.onclick=()=>{settingsPanel.style.display=(settingsPanel.style.display==='none'?'block':'none');}
 function closeSettings(){settingsPanel.style.display='none';}
 
-document.getElementById('muteMusic').addEventListener('change',(e)=>{
-  musicMuted=e.target.checked;
-});
-document.getElementById('muteSFX').addEventListener('change',(e)=>{
-  sfxMuted=e.target.checked;
+muteMusicCheckbox.onchange=(e)=>{musicMuted=e.target.checked; if(musicMuted) stopBackgroundMusic(); else playBackgroundMusic();}
+muteSFXCheckbox.onchange=(e)=>{sfxMuted=e.target.checked;}
+
+// ---------------- Tips ----------------
+const tipsBtn=document.getElementById('tipsBtn');
+const tipsPanel=document.getElementById('tipsPanel');
+tipsBtn.onclick=()=>{tipsPanel.style.display=(tipsPanel.style.display==='none'?'block':'none');}
+
+// ---------------- Sign-In / Create Account ----------------
+let authMode='signin'; // 'signin' or 'create'
+
+const usernameInput=document.getElementById('usernameInput');
+const passwordInput=document.getElementById('passwordInput');
+const authBtn=document.getElementById('authBtn');
+const toggleAuthBtn=document.getElementById('toggleAuthBtn');
+const authTitle=document.getElementById('authTitle');
+const authMessage=document.getElementById('authMessage');
+const rememberMeCheckbox=document.getElementById('rememberMe');
+
+// Load saved credentials
+window.addEventListener('load',()=>{
+  const savedUser=localStorage.getItem('savedUsername');
+  const savedPass=localStorage.getItem('savedPassword');
+  if(savedUser && savedPass){
+    usernameInput.value=savedUser;
+    passwordInput.value=savedPass;
+    rememberMeCheckbox.checked=true;
+  }
 });
 
-// ---------------- Main Menu Buttons ----------------
+// Toggle mode
+toggleAuthBtn.onclick=()=>{
+  if(authMode==='signin'){
+    authMode='create';
+    authTitle.textContent='Create Account';
+    authBtn.textContent='Create Account';
+    toggleAuthBtn.textContent='Already have an account? Sign In';
+    authMessage.textContent='';
+  } else{
+    authMode='signin';
+    authTitle.textContent='Sign In';
+    authBtn.textContent='Sign In';
+    toggleAuthBtn.textContent='Create Account';
+    authMessage.textContent='';
+  }
+};
+
+// Handle auth
+authBtn.onclick=()=>{
+  const username=usernameInput.value.trim();
+  const password=passwordInput.value.trim();
+  if(!username || !password){authMessage.textContent='Enter both username and password.'; return;}
+  let accounts=JSON.parse(localStorage.getItem('accounts')||'{}');
+  if(authMode==='create'){
+    if(accounts[username]){authMessage.textContent='Username already exists.'; return;}
+    accounts[username]=password;
+    localStorage.setItem('accounts',JSON.stringify(accounts));
+    authMessage.style.color='green';
+    authMessage.textContent='Account created! You can sign in now.';
+    usernameInput.value=''; passwordInput.value='';
+    authMode='signin'; authTitle.textContent='Sign In'; authBtn.textContent='Sign In'; toggleAuthBtn.textContent='Create Account';
+  } else{
+    if(accounts[username]!==password){authMessage.style.color='red'; authMessage.textContent='Invalid username or password.'; return;}
+    authMessage.style.color='green'; authMessage.textContent='Signed in successfully!';
+    if(rememberMeCheckbox.checked){
+      localStorage.setItem('savedUsername',username);
+      localStorage.setItem('savedPassword',password);
+    } else{
+      localStorage.removeItem('savedUsername');
+      localStorage.removeItem('savedPassword');
+    }
+    setTimeout(()=>{closeSettings(); startGame(); mainMenu.style.display='none'; document.getElementById('gameScreen').style.display='block'; playBackgroundMusic();},500);
+  }
+};
+
+// ---------------- Main Menu Play Button ----------------
 document.getElementById('playBtn').onclick=()=>{
-  mainMenu.style.display='none';
-  gameScreen.style.display='block';
-  startGame();
+  // Open settings to require sign-in before playing
+  settingsPanel.style.display='block';
+  authMessage.style.color='red';
+  authMessage.textContent='Please sign in to play.';
 };
-
-document.getElementById('tipsBtn').onclick=()=>{
-  const panel=document.getElementById('tipsPanel');
-  panel.style.display=panel.style.display==='block'?'none':'block';
-};
-
-// ---------------- Start Background Music on First Click ----------------
-document.body.addEventListener('click', ()=>{
-  if(audioCtx.state==='suspended') audioCtx.resume();
-  playBackgroundMusic();
-}, {once:true});
 </script>
 </body>
 </html>
-
-
